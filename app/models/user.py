@@ -1,66 +1,35 @@
-from . import db
-from sqlalchemy import Boolean, String, Text, ForeignKey, func, Integer, DateTime
+from app.extensions.extension import db
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
+import enum
 
+class UserRole(enum.Enum):
+    fan = "fan"
+    musician = "musician"
+    admin = "admin"
 
 class User(db.Model):
+    __tablename__ = 'users'
+    
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(150), unique=True, nullable=False)
-    password = db.Column(db.String(150), nullable=False)
-    parent_username = db.Column(db.String(150), ForeignKey('user.username'), nullable=True)
-    is_subaccount = db.Column(db.Boolean, default=False)
-    subaccounts = db.relationship(
-        'User',
-        backref=db.backref('parent', remote_side=[username]),
-        foreign_keys=[parent_username]
-    )
-    email = db.Column(db.String(150), unique=True, nullable=False)  # Add this line
-
-
-    # New fields for subscription
-    stripe_customer_id = db.Column(db.String(255), unique=True, nullable=True)
-    subscription = db.relationship('Subscription', backref='user', uselist=False)
-
-
-
-
-class Subscription(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True, nullable=False)
-    stripe_subscription_id = db.Column(db.String(255), unique=True, nullable=False)
-    status = db.Column(db.String(50), nullable=False, default='active')
-    plan_id = db.Column(db.Integer, db.ForeignKey('plan.id'), nullable=False)
-    current_period_start = db.Column(db.DateTime, nullable=False)
-    current_period_end = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    usage_count = db.Column(db.Integer, default=0)  # Number of times the user has used the service in the current period
-
-
-class Plan(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    price = db.Column(db.Float, nullable=False)
-    stripe_price_id = db.Column(db.String(255), unique=True, nullable=False)
-    interval = db.Column(db.String(20), nullable=False)  # 'month' or 'year'
-    usage_limit = db.Column(db.Integer, nullable=True)  # Add usage limit (null for unlimited)
-    subscriptions = db.relationship('Subscription', backref='plan')
-
-#     class Agent(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     name = db.Column(db.String(100), nullable=False)
-#     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-#     # Add any other fields needed for your Agent model
-#     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-#     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
-# class PhoneNumber(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     number = db.Column(db.String(20), nullable=False)
-#     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-#     # Add any other fields needed for your PhoneNumber model
-#     is_primary = db.Column(db.Boolean, default=False)
-#     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    username = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    phone_number = db.Column(db.String(20), unique=True, nullable=True)
+    role = db.Column(db.Enum(UserRole), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    @property
+    def password(self):
+        raise AttributeError('password is not a readable attribute')
+    
+    @password.setter
+    def password(self, password):
+        self.password_hash = generate_password_hash(password)
+    
+    def verify_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    
+    def __repr__(self):
+        return f'<User {self.username}>' 
