@@ -36,7 +36,7 @@ def create_app(config_name='default'):
     app.register_blueprint(recovery_bp)
     
     CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"], 
-                         "allow_headers": ["Content-Type", "Authorization"]}})
+                        }})
     
     @app.route('/')
     def index():
