@@ -14,8 +14,6 @@ from app.routes.auth.auth_utils import (
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
-secret_key = Config.SECRET_KEY or os.urandom(32)
-
 @auth_bp.route('/register', methods=['POST'])
 @handle_errors
 def register():
@@ -72,7 +70,7 @@ def set_role():
     
     user_id = data.get('user_id')
     role = data.get('role')
-    
+    print(user_id, role)
     # Find user by ID
     user = User.query.get(user_id)
     
@@ -113,8 +111,7 @@ def login():
     if not user or not user.verify_password(data.get('password')):
         return jsonify({'message': 'Invalid credentials'}), 401
     
-    # Generate JWT token
-    token = create_access_token(identity=user.id)
+    token = create_access_token(identity=user.id, secret_key)
     
     return jsonify({
         'message': 'Login successful',

@@ -4,30 +4,27 @@ from app.models.user import User
 from app.config import Config
 import os
 from app.extensions.extension import jwt
+from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
 
 secret_key = Config.SECRET_KEY or os.urandom(32)
 
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = None
-        
-        auth_header = request.headers.get('Authorization')
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-        
-        if not token:
-            return jsonify({'message': 'Token is missing'}), 401
-        
         try:
-            payload = jwt.decode(token, jwk_key, do_verify=True)
+            # Use Flask-JWT-Extended's built-in verification
+            verify_jwt_in_request()
             
-            current_user = User.query.get(payload['sub'])
+            # Get the user ID from the JWT
+            user_id = get_jwt_identity()
+            
+            # Get the user from the database
+            current_user = User.query.get(user_id)
             
             if not current_user:
                 return jsonify({'message': 'Invalid token: User not found'}), 401
                 
-        except JWTDecodeError as e:
+        except Exception as e:
             return jsonify({'message': f'Invalid token: {str(e)}'}), 401
         
         return f(current_user, *args, **kwargs)
