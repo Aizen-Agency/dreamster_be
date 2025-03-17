@@ -70,7 +70,7 @@ def set_role():
     
     user_id = data.get('user_id')
     role = data.get('role')
-    print(user_id, role)
+    
     # Find user by ID
     user = User.query.get(user_id)
     
@@ -83,8 +83,12 @@ def set_role():
         user.role = user_role
         db.session.commit()
         
+        # Generate a new token with the appropriate secret key
+        new_token = create_access_token(identity=user.id)
+        
         return jsonify({
             'message': 'User role set successfully',
+            'token': new_token,  # Include the new token
             'user': {
                 'id': user.id,
                 'username': user.username,
@@ -111,7 +115,7 @@ def login():
     if not user or not user.verify_password(data.get('password')):
         return jsonify({'message': 'Invalid credentials'}), 401
     
-    token = create_access_token(identity=user.id, secret_key)
+    token = create_access_token(identity=user.id)
     
     return jsonify({
         'message': 'Login successful',

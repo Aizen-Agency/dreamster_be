@@ -41,6 +41,7 @@ def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         try:
+            logger.info("Verifying JWT token")
             # Use Flask-JWT-Extended's built-in verification
             verify_jwt_in_request()
             
