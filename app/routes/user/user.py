@@ -16,8 +16,6 @@ user_bp = Blueprint('user', __name__, url_prefix='/api/user')
 @token_required
 @handle_errors
 def get_profile(current_user):
-    """Get the profile of the authenticated user."""
-    logger.info(f"Profile requested for user ID: {current_user.id}")
     return jsonify({
         'id': current_user.id,
         'username': current_user.username,
@@ -30,7 +28,6 @@ def get_profile(current_user):
 @token_required
 @handle_errors
 def update_user(current_user):
-    """Update the authenticated user's profile."""
     logger.info(f"Update requested for user ID: {current_user.id}")
     data = request.get_json()
     if not data:

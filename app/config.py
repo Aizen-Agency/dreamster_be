@@ -9,6 +9,11 @@ class Config:
     TESTING = False
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_DATABASE_URI = os.getenv('STAGING_DATABASE_URL')
+    
+    # SendGrid Email configuration
+    SENDGRID_API_KEY = os.environ.get('TWILIO_API_KEY', '')
+    SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'noreply@yourdomain.com')
+    SENDER_NAME = os.environ.get('SENDER_NAME', 'Dreamster App')
 
 class DevelopmentConfig(Config):
     DEBUG = True
