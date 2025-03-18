@@ -7,9 +7,9 @@ class VerificationCode(db.Model):
     __tablename__ = 'verification_codes'
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.UUID, db.ForeignKey('users.id'), nullable=False)
     code = db.Column(db.String(6), nullable=False)
-    purpose = db.Column(db.String(20), nullable=False)  # 'password_reset', 'email_verification', etc.
+    purpose = db.Column(db.String(20), nullable=False) 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime, nullable=False)
     is_used = db.Column(db.Boolean, default=False)

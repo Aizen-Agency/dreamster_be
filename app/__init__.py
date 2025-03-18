@@ -26,17 +26,18 @@ def create_app(config_name='default'):
     from app.routes.user import user_bp
     from app.routes.auth import auth_bp
     from app.routes.musician import musician_bp
+    from app.routes.musician.tracks.tracks import tracks_bp
     from app.routes.admin import admin_bp
     from app.routes.auth.recovery import recovery_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(musician_bp)
+    app.register_blueprint(tracks_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(recovery_bp)
     
-    CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"], 
-                        }})
+    CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"], "content-type": "*"}})
     
     @app.route('/')
     def index():
