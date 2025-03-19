@@ -26,9 +26,9 @@ def create_app(config_name='default'):
     from app.routes.user import user_bp
     from app.routes.auth import auth_bp
     from app.routes.musician import musician_bp
-    from app.routes.musician.tracks.tracks import tracks_bp
     from app.routes.admin import admin_bp
     from app.routes.auth.recovery import recovery_bp
+    from app.routes.musician.tracks.tracks import tracks_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)
@@ -45,6 +45,8 @@ def create_app(config_name='default'):
     
     # Import all models before creating tables
     from app.models.user import User, UserRole
+    from app.models.track import Track
+    from app.models.trackperk import TrackPerk
     
     # Create database tables
     with app.app_context():

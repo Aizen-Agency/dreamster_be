@@ -28,3 +28,11 @@ class Track(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     s3_url = db.Column(db.String)
     artist_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False) 
+    duration = db.Column(db.Integer)
+    stream_count = db.Column(db.Integer, default=0)
+    download_count = db.Column(db.Integer, default=0)
+    likes = db.Column(db.Integer, default=0)
+    comments = db.Column(db.Integer, default=0)
+    views = db.Column(db.Integer, default=0)
+    shares = db.Column(db.Integer, default=0)
+    
