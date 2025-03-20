@@ -34,4 +34,17 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
     
     def __repr__(self):
-        return f'<User {self.username}>' 
+        return f'<User {self.username}>'
+
+    def get_liked_tracks(self, page=1, per_page=10):
+        """Get tracks liked by this user with pagination"""
+        from app.models.track_like import TrackLike
+        from app.models.track import Track
+        
+        liked_tracks = TrackLike.query.filter_by(
+            user_id=self.id
+        ).order_by(
+            TrackLike.created_at.desc()
+        ).paginate(page=page, per_page=per_page)
+        
+        return liked_tracks 
