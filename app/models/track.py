@@ -36,3 +36,21 @@ class Track(db.Model):
     views = db.Column(db.Integer, default=0)
     shares = db.Column(db.Integer, default=0)
     
+    def increment_stream_count(self):
+        """Increment the stream count and save to database"""
+        self.stream_count += 1
+        db.session.commit()
+        return self.stream_count
+
+    def increment_like_count(self):
+        """Increment the like count and save to database"""
+        self.likes += 1
+        db.session.commit()
+        return self.likes
+
+    def decrement_like_count(self):
+        """Decrement the like count and save to database"""
+        if self.likes > 0:
+            self.likes -= 1
+            db.session.commit()
+        return self.likes
