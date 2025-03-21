@@ -13,7 +13,7 @@ def token_required(f):
     def decorated(*args, **kwargs):
         try:
             # Use Flask-JWT-Extended's built-in verification
-            verify_jwt_in_request()
+            verify_jwt_in_request(optional=True)
             
             # Get the user ID from the JWT
             user_id = get_jwt_identity()

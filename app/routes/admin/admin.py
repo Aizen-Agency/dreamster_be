@@ -33,13 +33,14 @@ def get_admin_stats(current_user):
     two_months_ago = today - timedelta(days=60)
     
     total_users = User.query.count()
-    total_users_prev_month = User.query.filter(User.created_at < current_month_start).count()
+    total_users_prev_month = User.query.filter(User.created_at < current_month_start, User.role == 'fan').count()
     users_growth = calculate_percentage_change(total_users, total_users_prev_month)
     
-    new_signups = User.query.filter(User.created_at >= current_month_start).count()
+    new_signups = User.query.filter(User.created_at >= current_month_start, User.role == 'fan').count()
     new_signups_prev_month = User.query.filter(
         User.created_at >= prev_month_start,
-        User.created_at < current_month_start
+        User.created_at < current_month_start,
+        User.role == 'fan'
     ).count()
     signups_growth = calculate_percentage_change(new_signups, new_signups_prev_month)
     
@@ -88,6 +89,13 @@ def get_admin_stats(current_user):
         Track.created_at < current_month_start
     ).count()
     new_tracks_growth = calculate_percentage_change(new_tracks, new_tracks_prev_month)
+
+    total_admins_prev_month = User.query.filter(
+        User.role == UserRole.admin,
+        User.created_at < current_month_start
+    ).count()
+    total_admins = User.query.filter(User.role == UserRole.admin).count()
+    admins_growth = calculate_percentage_change(total_admins, total_admins_prev_month)
     
     return jsonify({
         'total_users': {
@@ -111,6 +119,10 @@ def get_admin_stats(current_user):
                 'count': inactive_musicians,
                 'growth': inactive_musicians_growth
             }
+        },
+        'admins': {
+            'count': total_admins,
+            'growth': admins_growth
         },
         'tracks': {
             'total': {
@@ -197,7 +209,6 @@ def get_all_users(current_user):
     search_term = request.args.get('search')
     sort_by = request.args.get('sort_by', 'created_at')
     sort_order = request.args.get('sort_order', 'desc')
-    
     # Build query
     query = User.query
     
@@ -247,7 +258,7 @@ def get_all_users(current_user):
             'username': user.username,
             'email': user.email,
             'role': user.role.name if user.role else None,
-            'created_at': user.created_at.isoformat(),
+            'joined': user.created_at.isoformat(),
             'phone_number': user.phone_number,
             'track_count': track_count if user.role == UserRole.musician else None,
             'is_active': is_active if user.role == UserRole.musician else None
@@ -261,6 +272,78 @@ def get_all_users(current_user):
         'per_page': per_page
     }), HTTPStatus.OK
 
+@admin_bp.route('/user-distribution', methods=['GET'])
+@admin_required
+@handle_errors
+def get_user_distribution(current_user):
+    """Get distribution of users by role with counts, percentages, and growth"""
+    
+    today = datetime.utcnow().date()
+    current_month_start = datetime(today.year, today.month, 1)
+    
+    # Calculate previous month
+    if today.month == 1:
+        prev_month = 12
+        prev_year = today.year - 1
+    else:
+        prev_month = today.month - 1
+        prev_year = today.year
+    
+    prev_month_start = datetime(prev_year, prev_month, 1)
+    
+    # Get total users count
+    total_users = User.query.count()
+    total_users_prev_month = User.query.filter(User.created_at < current_month_start).count()
+    
+    # Get counts by role
+    musicians_count = User.query.filter(User.role == UserRole.musician).count()
+    fans_count = User.query.filter(User.role == UserRole.fan).count()
+    admins_count = User.query.filter(User.role == UserRole.admin).count()
+    
+    # Get previous month counts by role
+    musicians_prev = User.query.filter(
+        User.role == UserRole.musician,
+        User.created_at < current_month_start
+    ).count()
+    
+    fans_prev = User.query.filter(
+        User.role == UserRole.fan,
+        User.created_at < current_month_start
+    ).count()
+    
+    admins_prev = User.query.filter(
+        User.role == UserRole.admin,
+        User.created_at < current_month_start
+    ).count()
+    
+    # Calculate growth rates
+    musicians_growth = calculate_percentage_change(musicians_count, musicians_prev)
+    fans_growth = calculate_percentage_change(fans_count, fans_prev)
+    admins_growth = calculate_percentage_change(admins_count, admins_prev)
+    
+    # Calculate percentages of total users
+    musicians_percentage = round((musicians_count / total_users * 100), 2) if total_users > 0 else 0
+    fans_percentage = round((fans_count / total_users * 100), 2) if total_users > 0 else 0
+    admins_percentage = round((admins_count / total_users * 100), 2) if total_users > 0 else 0
+    
+    return jsonify({
+        'musicians': {
+            'count': musicians_count,
+            'percentage': musicians_percentage,
+            'growth': musicians_growth
+        },
+        'fans': {
+            'count': fans_count,
+            'percentage': fans_percentage,
+            'growth': fans_growth
+        },
+        'admins': {
+            'count': admins_count,
+            'percentage': admins_percentage,
+            'growth': admins_growth
+        }
+    }), HTTPStatus.OK
+    
 def calculate_percentage_change(current, previous):
     """Calculate percentage change between current and previous values"""
     if previous == 0:
