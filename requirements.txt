@@ -92,7 +92,6 @@ waitress==3.0.0
 Werkzeug==2.3.7
 yarl==1.9.2
 boto3==1.34.34
-assemblyai==0.19.1
 faiss-cpu==1.7.4
 bs4==0.0.1
 elevenlabs==0.2.26
