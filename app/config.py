@@ -17,17 +17,17 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = os.getenv('DEVELOPMENT_DATABASE_URL') or os.getenv('STAGING_DATABASE_URL')
+    SQLALCHEMY_DATABASE_URI = os.getenv('DEVELOPMENT_DATABASE_URL') or os.getenv('DATABASE_URL')
 
 class TestingConfig(Config):
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = os.getenv('TESTING_DATABASE_URL') or os.getenv('STAGING_DATABASE_URL')
+    SQLALCHEMY_DATABASE_URI = os.getenv('TESTING_DATABASE_URL') or os.getenv('DATABASE_URL')
 
 class ProductionConfig(Config):
-    SQLALCHEMY_DATABASE_URI = os.getenv('PRODUCTION_DATABASE_URL') or os.getenv('STAGING_DATABASE_URL')
+    SQLALCHEMY_DATABASE_URI = os.getenv('PRODUCTION_DATABASE_URL') or os.getenv('DATABASE_URL')
 
 class StagingConfig(Config):
-    SQLALCHEMY_DATABASE_URI = os.getenv('STAGING_DATABASE_URL')
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
 
 config_by_name = {
     'development': DevelopmentConfig,
