@@ -22,7 +22,7 @@ def create_app(config_name='default'):
     # Configure CORS based on environment
     if app.config['ENV'] == 'production':
         # Production CORS settings - restrict to specific origins
-        allowed_origins = app.config.get('ALLOWED_ORIGINS', 'https://dreamster-fe.vercel.app')
+        allowed_origins = app.config.get('ALLOWED_ORIGINS', ['https://dreamster-fe.vercel.app', 'https://dreamster-fe.vercel.app/'])
         CORS(app, resources={r"/*": {
             "origins": allowed_origins.split(','),
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -34,6 +34,7 @@ def create_app(config_name='default'):
         CORS(app, resources={r"/*": {
             "origins": "*", 
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
             "content-type": "*"
         }})
     
