@@ -12,6 +12,8 @@ def create_app(config_name='default'):
     
     # Initialize app
     app = Flask(__name__)
+    CORS(app)
+
     app.config.from_object(config_by_name[config_name])
     
     # Initialize extensions with app
@@ -19,24 +21,24 @@ def create_app(config_name='default'):
     jwt.init_app(app)
     migrate.init_app(app, db)
 
-    # Configure CORS based on environment
-    if app.config['ENV'] == 'production':
-        # Production CORS settings - restrict to specific origins
-        allowed_origins = app.config.get('ALLOWED_ORIGINS', ['https://dreamster-fe.vercel.app', 'https://dreamster-fe.vercel.app/'])
-        CORS(app, resources={r"/*": {
-            "origins": allowed_origins.split(','),
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": True
-        }})
-    else:
-        # Development CORS settings - allow all origins
-        CORS(app, resources={r"/*": {
-            "origins": "*", 
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "content-type": "*"
-        }})
+    # # Configure CORS based on environment
+    # if app.config['ENV'] == 'production':
+    #     # Production CORS settings - restrict to specific origins
+    #     allowed_origins = app.config.get('ALLOWED_ORIGINS', ['https://dreamster-fe.vercel.app', 'https://dreamster-fe.vercel.app/'])
+    #     CORS(app, resources={r"/*": {
+    #         "origins": allowed_origins.split(','),
+    #         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    #         "allow_headers": ["Content-Type", "Authorization"],
+    #         "supports_credentials": True
+    #     }})
+    # else:
+    #     # Development CORS settings - allow all origins
+    #     CORS(app, resources={r"/*": {
+    #         "origins": "*", 
+    #         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    #         "allow_headers": ["Content-Type", "Authorization"],
+    #         "content-type": "*"
+    #     }})
     
     # Import JWT utils to register the loaders
     from app.utils import jwt_utils
