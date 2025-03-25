@@ -93,5 +93,6 @@ Werkzeug==2.3.7
 yarl==1.9.2
 boto3==1.34.34
 faiss-cpu==1.7.4
+flask_jwt_extended
 bs4==0.0.1
 elevenlabs==0.2.26
