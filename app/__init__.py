@@ -18,6 +18,8 @@ def create_app(config_name='default'):
     db.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
+
+    CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"], "content-type": "*"}})
     
     # Import JWT utils to register the loaders
     from app.utils import jwt_utils
@@ -42,9 +44,7 @@ def create_app(config_name='default'):
     app.register_blueprint(stream_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(likes_bp)
-    
-    CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"], "content-type": "*"}})
-    
+        
     @app.route('/')
     def index():
         return "Welcome to the API"
