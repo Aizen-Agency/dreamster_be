@@ -11,7 +11,7 @@ class S3Service:
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
             region_name=os.environ.get('AWS_REGION', 'eu-north-1')
         )
-        self.bucket_name = 'dreamster-tracks'
+        self.bucket_name = bucket_name
         self.region = os.environ.get('AWS_REGION', 'eu-north-1')
 
     def upload_file(self, file, track_id, is_artwork):
@@ -33,8 +33,8 @@ class S3Service:
             
             self.s3.upload_fileobj(
                 file, 
-                self.bucket_name, 
-                file_key,
+                self.bucket_name,
+                Key=file_key,
                 ExtraArgs=extra_args
             )
             
@@ -53,4 +53,29 @@ class S3Service:
             file_key = f"{track_id}/{'artwork' if is_artwork else 'audio'}{extension}"
             self.s3.delete_object(Bucket=self.bucket_name, Key=file_key)
         except ClientError as e:
-            raise Exception(f"Failed to delete file: {str(e)}") 
+            raise Exception(f"Failed to delete file: {str(e)}")
+
+    def upload_profile_picture(self, file, user_id):
+        try:
+            file_extension = os.path.splitext(file.filename)[1]
+            
+            content_type = mimetypes.guess_type(file.filename)[0]
+            if content_type is None:
+                content_type = 'image/jpeg'
+            
+            file_key = f"profiles/{user_id}/profile{file_extension}"
+            
+            extra_args = {
+                'ContentType': content_type
+            }
+            
+            self.s3.upload_fileobj(
+                file, 
+                self.bucket_name, 
+                Key=file_key,
+                ExtraArgs=extra_args
+            )
+            
+            return f"https://{self.bucket_name}.s3.{self.region}.amazonaws.com/{file_key}"
+        except (NoCredentialsError, ClientError) as e:
+            raise Exception(f"Failed to upload profile picture: {str(e)}") 

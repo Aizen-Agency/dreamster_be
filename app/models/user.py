@@ -19,6 +19,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     phone_number = db.Column(db.String(20), unique=True, nullable=True)
     role = db.Column(db.Enum(UserRole), nullable=True)
+    profile_picture_url = db.Column(db.String, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

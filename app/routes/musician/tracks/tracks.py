@@ -1,62 +1,3 @@
-# from flask import Blueprint, request, jsonify
-# from app.middleware.musician_auth import musician_required
-# from app.extensions.extension import db
-# from app.models.track import Track
-# from app.services.s3_service import S3Service
-# from http import HTTPStatus
-# from app.routes.user.user_utils import handle_errors
-# import uuid
-
-# tracks_bp = Blueprint('tracks', __name__, url_prefix='/api/musician/tracks')
-# s3_service = S3Service(bucket_name='your-s3-bucket-name')
-
-# @tracks_bp.route('/', methods=['POST'])
-# @musician_required
-# @handle_errors
-# def upload_track(current_user):
-#     try:
-#         # Validate and process input
-#         title = request.form.get('title')
-#         if not title:
-#             return jsonify({'message': 'Title is required'}), HTTPStatus.BAD_REQUEST
-
-#         # Save metadata to database
-#         track_id = uuid.uuid4()
-#         track = Track(
-#             id=track_id,
-#             title=title,
-#             description=request.form.get('description'),
-#             genre=request.form.get('genre'),
-#             tags=request.form.get('tags'),
-#             starting_price=request.form.get('starting_price', 0),
-#             artist_id=current_user.id
-#         )
-#         db.session.add(track)
-#         db.session.commit()
-
-#         # Upload files to S3
-#         audio_file = request.files.get('audio')
-#         artwork_file = request.files.get('artwork')
-#         if audio_file:
-#             track.s3_url = s3_service.upload_file(audio_file, track_id, is_artwork=False)
-#         if artwork_file:
-#             s3_service.upload_file(artwork_file, track_id, is_artwork=True)
-
-#         db.session.commit()
-
-#         # Return success response
-#         return jsonify({
-#             'message': 'Track uploaded successfully',
-#             'track': {
-#                 'id': track.id,
-#                 'title': track.title,
-#                 's3_url': track.s3_url
-#             }
-#         }), HTTPStatus.CREATED
-#     except Exception as e:
-#         db.session.rollback()
-#         return jsonify({'message': f'Error uploading track: {str(e)}'}), HTTPStatus.INTERNAL_SERVER_ERROR
-
 from flask import Blueprint, request, jsonify
 from app.middleware.musician_auth import musician_required
 from app.extensions.extension import db
@@ -71,7 +12,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 
 tracks_bp = Blueprint('tracks', __name__, url_prefix='/api/musician/tracks')
-s3_service = S3Service(bucket_name='your-s3-bucket-name')
+s3_service = S3Service(bucket_name='dreamster-tracks')
 
 @tracks_bp.route('/', methods=['POST'])
 @musician_required
@@ -165,6 +106,8 @@ def get_track_details(current_user, track_id):
         'genre': track.genre.name if track.genre else None,
         'tags': track.tags,
         'starting_price': track.starting_price,
+        'created_at': track.created_at.isoformat(),
+        'updated_at': track.updated_at.isoformat(),
         's3_url': track.s3_url
     }), HTTPStatus.OK
 

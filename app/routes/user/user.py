@@ -3,14 +3,17 @@ from app.utils.auth import token_required
 from app.extensions.extension import db
 from app.models.user import User
 from app.routes.user.user_utils import validate_user_update, handle_errors
+from app.services.s3_service import S3Service
 from http import HTTPStatus
 import logging
 from functools import wraps
+import os
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 user_bp = Blueprint('user', __name__, url_prefix='/api/user')
+s3_service = S3Service(bucket_name='dreamster-users')
 
 @user_bp.route('/profile', methods=['GET'])
 @token_required
@@ -21,7 +24,8 @@ def get_profile(current_user):
         'username': current_user.username,
         'email': current_user.email,
         'role': current_user.role.name if current_user.role else None,
-        'phone_number': current_user.phone_number
+        'phone_number': current_user.phone_number,
+        'profile_picture_url': current_user.profile_picture_url
     }), HTTPStatus.OK
 
 @user_bp.route('/update', methods=['PUT'])
@@ -66,13 +70,56 @@ def update_user(current_user):
                 'username': current_user.username,
                 'email': current_user.email,
                 'role': current_user.role.name if current_user.role else None,
-                'phone_number': current_user.phone_number
+                'phone_number': current_user.phone_number,
+                'profile_picture_url': current_user.profile_picture_url
             }
         }), HTTPStatus.OK
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error updating user {current_user.id}: {str(e)}")
         return jsonify({'message': 'An error occurred while updating user'}), HTTPStatus.INTERNAL_SERVER_ERROR 
+
+@user_bp.route('/profile-picture', methods=['POST'])
+@token_required
+@handle_errors
+def upload_profile_picture(current_user):
+    """Upload a profile picture for the current user"""
+    logger.info(f"Profile picture upload requested for user ID: {current_user.id}")
+    
+    # Check if file is present in request
+    if 'profile_picture' not in request.files:
+        return jsonify({'message': 'No profile picture provided'}), HTTPStatus.BAD_REQUEST
+    
+    profile_picture = request.files['profile_picture']
+    
+    # Check if filename is empty
+    if profile_picture.filename == '':
+        return jsonify({'message': 'No profile picture selected'}), HTTPStatus.BAD_REQUEST
+    
+    # Check file type
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif'}
+    file_extension = os.path.splitext(profile_picture.filename)[1].lower()
+    if file_extension not in allowed_extensions:
+        return jsonify({'message': 'File type not allowed. Please upload a JPG, PNG or GIF image'}), HTTPStatus.BAD_REQUEST
+    
+    try:
+        # Upload to S3
+        profile_url = s3_service.upload_profile_picture(profile_picture, current_user.id)
+        
+        # Update user record
+        current_user.profile_picture_url = profile_url
+        db.session.commit()
+        
+        logger.info(f"Profile picture uploaded successfully for user ID: {current_user.id}")
+        
+        return jsonify({
+            'message': 'Profile picture uploaded successfully',
+            'profile_picture_url': profile_url
+        }), HTTPStatus.OK
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error uploading profile picture for user {current_user.id}: {str(e)}")
+        return jsonify({'message': f'Error uploading profile picture: {str(e)}'}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 def handle_errors(f):
     @wraps(f)
