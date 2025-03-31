@@ -20,10 +20,17 @@ class Config:
     
     SQLALCHEMY_DATABASE_URI = db_url
     
-    # SendGrid Email configuration
-    SENDGRID_API_KEY = os.environ.get('TWILIO_API_KEY', '')
-    SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'noreply@yourdomain.com')
+    # Email configuration
+    SMTP_HOST = os.environ.get('SMTP_HOST')
+    SMTP_PORT = int(os.environ.get('SMTP_PORT'  ))
+    SMTP_USER = os.environ.get('SMTP_USER')
+    SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD')
+    SENDER_EMAIL = os.environ.get('SENDER_EMAIL')
+    SENDER_NAME = os.environ.get('SENDER_NAME')
+    PROJECT_NAME = os.environ.get('PROJECT_NAME')
+
     SENDER_NAME = os.environ.get('SENDER_NAME', 'Dreamster App')
+    PROJECT_NAME = os.environ.get('PROJECT_NAME', 'Dreamster')
 
 class DevelopmentConfig(Config):
     DEBUG = True

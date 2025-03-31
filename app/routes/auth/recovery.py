@@ -36,10 +36,28 @@ def request_password_reset():
     verification = VerificationCode.generate_code(user.id, 'password_reset')
     
     # Send email with verification code
-    subject = "Password Reset Verification - Dreamster"
-    body = f"Your verification code for Dreamster password reset is: {verification.code}\n\nThis code will expire in 15 minutes."
+    subject = "Password Reset Verification"
     
-    email_sent = email_service.send_email(email, subject, body)
+    # HTML body with formatting
+    html_body = f"""
+    <p>You have requested to reset your password.</p>
+    <p>Your verification code is: <strong style="font-size: 18px;">{verification.code}</strong></p>
+    <p>This code will expire in 15 minutes.</p>
+    <p>If you did not request this password reset, please ignore this email or contact support if you have concerns.</p>
+    """
+    
+    # Plain text body without HTML tags
+    plain_body = f"""
+You have requested to reset your password.
+
+Your verification code is: {verification.code}
+
+This code will expire in 15 minutes.
+
+If you did not request this password reset, please ignore this email or contact support if you have concerns.
+    """
+    
+    email_sent = email_service.send_email(email, subject, html_body, plain_body)
     
     if not email_sent:
         return jsonify({'message': 'Failed to send verification code'}), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -78,7 +96,7 @@ def verify_code():
     
     # Generate a temporary token for password reset
     # This token will be used in the next step to reset the password
-    reset_verification = VerificationCode.generate_code(user.id, 'password_reset_confirmed', expiry_minutes=30)
+    reset_verification = VerificationCode.generate_code(user.id, 'password_confirmed', expiry_minutes=30)
     
     # Mark the verification code as used
     verification.mark_as_used()
@@ -115,7 +133,7 @@ def reset_password():
     verification = VerificationCode.query.filter_by(
         user_id=user.id,
         code=reset_token,
-        purpose='password_reset_confirmed',
+        purpose='password_confirmed',
         is_used=False
     ).first()
     
@@ -131,5 +149,20 @@ def reset_password():
     # Save changes
     db.session.commit()
     
+    # Send confirmation email
+    subject = "Password Reset Successful"
+    html_body = f"""
+    <p>Your password has been successfully reset.</p>
+    <p>If you did not make this change, please contact our support team immediately.</p>
+    """
+
+    plain_body = """
+    Your password has been successfully reset.
+
+    If you did not make this change, please contact our support team immediately.
+    """
+
+    email_service.send_email(email, subject, html_body, plain_body)
+    
     logger.info(f"Password reset successful for user {user.id}")
-    return jsonify({'message': 'Password has been reset successfully'}), HTTPStatus.OK 
+    return jsonify({'message': 'Password has been reset successfully'}), HTTPStatus.OK

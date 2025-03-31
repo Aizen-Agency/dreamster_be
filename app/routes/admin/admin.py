@@ -261,6 +261,7 @@ def get_all_users(current_user):
             'joined': user.created_at.isoformat(),
             'phone_number': user.phone_number,
             'track_count': track_count if user.role == UserRole.musician else None,
+            'avatar': user.profile_picture_url if user.profile_picture_url else None,
             'is_active': is_active if user.role == UserRole.musician else None
         })
     
