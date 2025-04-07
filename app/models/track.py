@@ -15,6 +15,11 @@ class Genre(enum.Enum):
     ambient = "ambient"                            
     jazz = "jazz"                               
 
+class TrackStatus(enum.Enum):
+    pending = "pending"
+    active = "active"
+    rejected = "rejected"
+
 class Track(db.Model):
     __tablename__ = 'tracks'
 
@@ -35,6 +40,9 @@ class Track(db.Model):
     comments = db.Column(db.Integer, default=0)
     views = db.Column(db.Integer, default=0)
     shares = db.Column(db.Integer, default=0)
+    approved = db.Column(db.Boolean, default=False)
+    status = db.Column(db.Enum(TrackStatus), default=TrackStatus.pending)
+    rejection_reason = db.Column(db.Text)
     
     def increment_stream_count(self):
         """Increment the stream count and save to database"""

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app.middleware.musician_auth import musician_required
 from app.extensions.extension import db
-from app.models.track import Track, Genre
+from app.models.track import Track, Genre, TrackStatus
 from app.services.s3_service import S3Service
 from http import HTTPStatus
 from app.routes.user.user_utils import handle_errors
@@ -44,16 +44,20 @@ def upload_track(current_user):
             except json.JSONDecodeError:
                 return jsonify({'message': 'Invalid JSON format for tags'}), HTTPStatus.BAD_REQUEST
 
-        # Save metadata to database
+        # Generate track ID
         track_id = uuid.uuid4()
+
+        # Save metadata to database
         track = Track(
             id=track_id,
             title=title,
             description=request.form.get('description'),
-            genre=genre,  # Now using the enum value
+            genre=genre,
             tags=tags,
             starting_price=request.form.get('starting_price', 0),
-            artist_id=current_user.id
+            artist_id=current_user.id,
+            approved=False,
+            status='pending'
         )
         db.session.add(track)
         db.session.commit()
@@ -70,11 +74,13 @@ def upload_track(current_user):
 
         # Return success response
         return jsonify({
-            'message': 'Track uploaded successfully',
+            'message': 'Track uploaded successfully and pending approval',
             'track': {
-                'id': track.id,
+                'id': str(track.id),
                 'title': track.title,
-                's3_url': track.s3_url
+                's3_url': track.s3_url,
+                'status': track.status.name,
+                'approved': track.approved
             }
         }), HTTPStatus.CREATED
     except Exception as e:
@@ -244,7 +250,7 @@ def list_track_perks(current_user, track_id):
         'url': perk.url,
         'active': perk.active,
         'created_at': perk.created_at.isoformat(),
-        'updated_at': perk.updated_at.isoformat()
+        'updated_at': perk.updated_at.isoformat(),
     } for perk in perks]), HTTPStatus.OK
 
 @tracks_bp.route('/<uuid:track_id>/perks/<uuid:perk_id>', methods=['GET'])

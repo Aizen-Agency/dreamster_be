@@ -15,6 +15,28 @@ logger = logging.getLogger(__name__)
 user_bp = Blueprint('user', __name__, url_prefix='/api/user')
 s3_service = S3Service(bucket_name='dreamster-users')
 
+@user_bp.route('/<uuid:user_id>', methods=['GET'])
+@token_required
+@handle_errors
+def get_user_by_id(current_user, user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'message': 'User not found'}), HTTPStatus.NOT_FOUND
+    return jsonify({
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'role': user.role.name if user.role else None,
+        'avatar': user.profile_picture_url if user.profile_picture_url else None,
+        'phone_number': user.phone_number,
+        'created_at': user.created_at,
+        'updated_at': user.updated_at,
+        # 'bio': user.bio if user.bio else None,
+        # 'location': user.location if user.location else None,
+        # 'website': user.website if user.website else None,
+        # 'social_links': user.social_links if user.social_links else None
+    }), HTTPStatus.OK
+
 @user_bp.route('/profile', methods=['GET'])
 @token_required
 @handle_errors

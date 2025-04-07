@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app.extensions.extension import db
-from app.models.track import Track
-from app.models.user import User
+from app.models.track import Track, TrackStatus
+from app.models.user import User, UserRole
 from http import HTTPStatus
 from app.routes.user.user_utils import handle_errors
 from sqlalchemy import desc
@@ -19,8 +19,39 @@ def get_tracks():
     genre = request.args.get('genre')
     sort_by = request.args.get('sort_by', 'created_at')
     
+    # Check if the current user is an artist or admin
+    is_artist = False
+    is_admin = False
+    current_user_id = None
+    
+    try:
+        verify_jwt_in_request(optional=True)
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            current_user = User.query.get(current_user_id)
+            if current_user:
+                is_artist = current_user.role == UserRole.musician
+                is_admin = current_user.role == UserRole.admin
+    except Exception:
+        pass
+    
     # Build query
     query = Track.query
+    
+    # Apply access rules:
+    # 1. Admin can see all tracks
+    # 2. Artist can see all approved tracks and their own tracks
+    # 3. Regular users can only see approved and active tracks
+    if not is_admin:
+        if is_artist and current_user_id:
+            # Artists can see their own tracks plus approved active tracks from others
+            query = query.filter(
+                (Track.artist_id == current_user_id) | 
+                ((Track.approved == True) & (Track.status == TrackStatus.active))
+            )
+        else:
+            # Regular users can only see approved and active tracks
+            query = query.filter_by(approved=True, status=TrackStatus.active)
     
     # Apply filters
     if genre:
@@ -79,6 +110,24 @@ def get_tracks():
 def get_track_details(track_id):
     """Get detailed information about a specific track"""
     track = Track.query.get_or_404(track_id)
+    
+    # Check if the current user is the artist or an admin
+    is_artist = False
+    is_admin = False
+    try:
+        verify_jwt_in_request(optional=True)
+        user_id = get_jwt_identity()
+        if user_id:
+            current_user = User.query.get(user_id)
+            is_artist = current_user and str(track.artist_id) == str(current_user.id)
+            is_admin = current_user and current_user.role == UserRole.admin
+    except Exception:
+        pass
+    
+    # If track is not approved and the user is not the artist or admin, return 404
+    if not (track.approved and track.status == TrackStatus.active) and not (is_artist or is_admin):
+        return jsonify({'message': 'Track not found or not available'}), HTTPStatus.NOT_FOUND
+    
     artist = User.query.get(track.artist_id)
     
     # Increment view count
@@ -144,8 +193,25 @@ def get_artist_tracks(artist_id):
     # Verify artist exists
     artist = User.query.get_or_404(artist_id)
     
+    # Check if the current user is the artist or an admin
+    is_artist = False
+    is_admin = False
+    try:
+        verify_jwt_in_request(optional=True)
+        user_id = get_jwt_identity()
+        if user_id:
+            current_user = User.query.get(user_id)
+            is_artist = current_user and current_user.role == UserRole.musician
+            is_admin = current_user and current_user.role == UserRole.admin
+    except Exception:
+        pass
+    
     # Build query for artist's tracks
     query = Track.query.filter_by(artist_id=artist_id)
+    
+    # If not the artist themselves or an admin, only show approved tracks
+    if not (is_artist or is_admin):
+        query = query.filter_by(approved=True, status=TrackStatus.active)
     
     # Apply sorting
     if sort_by == 'popular':
@@ -177,7 +243,9 @@ def get_artist_tracks(artist_id):
             'stream_count': track.stream_count,
             'likes': track.likes,
             'created_at': track.created_at.isoformat(),
-            'artwork_url': artwork_url
+            'artwork_url': artwork_url,
+            'status': track.status.name if track.status else None,
+            'approved': track.approved
         })
     
     return jsonify({
