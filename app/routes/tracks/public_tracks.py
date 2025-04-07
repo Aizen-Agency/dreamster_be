@@ -5,7 +5,7 @@ from app.models.user import User, UserRole
 from http import HTTPStatus
 from app.routes.user.user_utils import handle_errors
 from sqlalchemy import desc
-from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
+from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request, jwt_required
 import uuid
 
 public_tracks_bp = Blueprint('public_tracks', __name__, url_prefix='/api/tracks')
@@ -19,7 +19,6 @@ def get_tracks():
     genre = request.args.get('genre')
     sort_by = request.args.get('sort_by', 'created_at')
     
-    # Check if the current user is an artist or admin
     is_artist = False
     is_admin = False
     current_user_id = None
@@ -38,10 +37,6 @@ def get_tracks():
     # Build query
     query = Track.query
     
-    # Apply access rules:
-    # 1. Admin can see all tracks
-    # 2. Artist can see all approved tracks and their own tracks
-    # 3. Regular users can only see approved and active tracks
     if not is_admin:
         if is_artist and current_user_id:
             # Artists can see their own tracks plus approved active tracks from others
@@ -114,18 +109,26 @@ def get_track_details(track_id):
     # Check if the current user is the artist or an admin
     is_artist = False
     is_admin = False
+    user_id = None
+    
     try:
         verify_jwt_in_request(optional=True)
         user_id = get_jwt_identity()
         if user_id:
             current_user = User.query.get(user_id)
-            is_artist = current_user and str(track.artist_id) == str(current_user.id)
-            is_admin = current_user and current_user.role == UserRole.admin
-    except Exception:
+            if current_user:  # Make sure current_user exists
+                is_artist = str(track.artist_id) == str(user_id)
+                is_admin = current_user.role == UserRole.admin
+                print(f"User ID: {user_id}, is_admin: {is_admin}, is_artist: {is_artist}")
+                print(f"User role: {current_user.role}, Admin role: {UserRole.admin}")
+                print(f"Track status: {track.status}, approved: {track.approved}")
+    except Exception as e:
+        print(f"Exception in JWT verification: {str(e)}")
         pass
     
-    # If track is not approved and the user is not the artist or admin, return 404
-    if not (track.approved and track.status == TrackStatus.active) and not (is_artist or is_admin):
+    # If user is not admin or artist, they can only see approved and active tracks
+    if not (is_artist or is_admin) and not (track.approved and track.status == TrackStatus.active):
+        print(f"Access denied - is_admin: {is_admin}, is_artist: {is_artist}")
         return jsonify({'message': 'Track not found or not available'}), HTTPStatus.NOT_FOUND
     
     artist = User.query.get(track.artist_id)
@@ -144,20 +147,16 @@ def get_track_details(track_id):
     # Check if the current user has liked this track
     user_liked = False
     
-    # Try to get the user identity, but don't require authentication
-    try:
-        from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
-        verify_jwt_in_request(optional=True)
-        user_id = get_jwt_identity()
-        if user_id:
-            from app.models.track_like import TrackLike
-            user_liked = TrackLike.query.filter_by(
-                user_id=user_id, 
-                track_id=track_id
-            ).first() is not None
-    except Exception:
-        # If there's any error with the JWT, just assume the user is not authenticated
-        pass
+    # We already have the user_id from above, no need to verify again
+    if user_id:
+        from app.models.track_like import TrackLike
+        user_liked = TrackLike.query.filter_by(
+            user_id=user_id, 
+            track_id=track_id
+        ).first() is not None
+    
+    print(f"User ID: {user_id}, is_admin: {is_admin}, is_artist: {is_artist}")
+    print(f"Track status: {track.status}, approved: {track.approved}")
     
     return jsonify({
         'id': str(track.id),
@@ -180,7 +179,7 @@ def get_track_details(track_id):
             'name': artist.username,
             'username': artist.username
         }
-    }), HTTPStatus.OK 
+    }), HTTPStatus.OK
 
 @public_tracks_bp.route('/artist/<uuid:artist_id>', methods=['GET'])
 @handle_errors
