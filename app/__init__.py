@@ -54,6 +54,7 @@ def create_app(config_name='default'):
     from app.routes.admin.admin import admin_bp
     from app.routes.tracks.likes import likes_bp
     from app.routes.admin.track_approval import track_approval_bp
+    from app.routes.admin.track_management import track_management_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)
@@ -65,6 +66,7 @@ def create_app(config_name='default'):
     app.register_blueprint(admin_bp)
     app.register_blueprint(likes_bp)
     app.register_blueprint(track_approval_bp)
+    app.register_blueprint(track_management_bp)
         
     @app.route('/')
     def index():
