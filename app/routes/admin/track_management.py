@@ -52,6 +52,7 @@ def get_all_tracks(current_user):
             'status': track.status.name if track.status else None,
             'approved': track.approved,
             'rejection_reason': track.rejection_reason,
+            'exclusive': track.exclusive,
             'artist': {
                 'id': str(artist.id),
                 'name': artist.username,

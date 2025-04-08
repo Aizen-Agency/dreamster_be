@@ -44,6 +44,9 @@ def upload_track(current_user):
             except json.JSONDecodeError:
                 return jsonify({'message': 'Invalid JSON format for tags'}), HTTPStatus.BAD_REQUEST
 
+        # Process exclusive flag
+        exclusive = request.form.get('exclusive', 'false').lower() == 'true'
+
         # Generate track ID
         track_id = uuid.uuid4()
 
@@ -57,7 +60,8 @@ def upload_track(current_user):
             starting_price=request.form.get('starting_price', 0),
             artist_id=current_user.id,
             approved=False,
-            status='pending'
+            status='pending',
+            exclusive=exclusive
         )
         db.session.add(track)
         db.session.commit()
@@ -80,7 +84,8 @@ def upload_track(current_user):
                 'title': track.title,
                 's3_url': track.s3_url,
                 'status': track.status.name,
-                'approved': track.approved
+                'approved': track.approved,
+                'exclusive': track.exclusive
             }
         }), HTTPStatus.CREATED
     except Exception as e:
@@ -159,6 +164,9 @@ def update_track(current_user, track_id):
                 track.starting_price = float(price_value)
         except ValueError:
             return jsonify({'message': 'Invalid starting price format'}), HTTPStatus.BAD_REQUEST
+    
+    if 'exclusive' in request.json:
+        track.exclusive = bool(request.json.get('exclusive'))
 
     db.session.commit()
     
@@ -172,7 +180,8 @@ def update_track(current_user, track_id):
             'genre': track.genre.name if track.genre else None,
             'tags': track.tags,
             'starting_price': float(track.starting_price) if track.starting_price else 0,
-            's3_url': track.s3_url
+            's3_url': track.s3_url,
+            'exclusive': track.exclusive
         }
     }), HTTPStatus.OK
 

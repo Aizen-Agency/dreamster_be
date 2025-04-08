@@ -86,6 +86,7 @@ def get_tracks():
             'likes': track.likes,
             'created_at': track.created_at.isoformat(),
             'artwork_url': artwork_url,
+            'exclusive': track.exclusive,
             'artist': {
                 'id': str(artist.id),
                 'name': artist.username,
@@ -174,6 +175,7 @@ def get_track_details(track_id):
         'created_at': track.created_at.isoformat(),
         'artwork_url': artwork_url,
         'user_liked': user_liked,
+        'exclusive': track.exclusive,
         'artist': {
             'id': str(artist.id),
             'name': artist.username,
@@ -244,7 +246,8 @@ def get_artist_tracks(artist_id):
             'created_at': track.created_at.isoformat(),
             'artwork_url': artwork_url,
             'status': track.status.name if track.status else None,
-            'approved': track.approved
+            'approved': track.approved,
+            'exclusive': track.exclusive
         })
     
     return jsonify({

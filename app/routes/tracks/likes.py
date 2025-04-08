@@ -144,6 +144,7 @@ def get_liked_tracks():
             'created_at': track.created_at.isoformat(),
             'artwork_url': artwork_url,
             'liked_at': like.created_at.isoformat(),
+            'exclusive': track.exclusive,
             'artist': {
                 'id': str(artist.id),
                 'name': artist.name if hasattr(artist, 'name') else artist.username,
