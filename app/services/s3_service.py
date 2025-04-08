@@ -78,4 +78,52 @@ class S3Service:
             
             return f"https://{self.bucket_name}.s3.{self.region}.amazonaws.com/{file_key}"
         except (NoCredentialsError, ClientError) as e:
-            raise Exception(f"Failed to upload profile picture: {str(e)}") 
+            raise Exception(f"Failed to upload profile picture: {str(e)}")
+
+    def upload_perk_file(self, file, track_id, perk_id, is_audio=False):
+        try:
+            file_extension = os.path.splitext(file.filename)[1]
+            
+            content_type = mimetypes.guess_type(file.filename)[0]
+            if content_type is None:
+                content_type = 'audio/mpeg' if is_audio else 'application/octet-stream'
+            
+            # Determine the file path based on whether it's a stem or other perk file
+            if is_audio:
+                file_key = f"{track_id}/stems/{perk_id}{file_extension}"
+            else:
+                file_key = f"{track_id}/perks/{perk_id}{file_extension}"
+            
+            extra_args = {
+                'ContentType': content_type
+            }
+            
+            self.s3.upload_fileobj(
+                file, 
+                self.bucket_name,
+                Key=file_key,
+                ExtraArgs=extra_args
+            )
+            
+            return f"https://{self.bucket_name}.s3.{self.region}.amazonaws.com/{file_key}"
+        except (NoCredentialsError, ClientError) as e:
+            raise Exception(f"Failed to upload perk file: {str(e)}")
+
+    def delete_perk_file(self, track_id, perk_id, is_audio=False):
+        try:
+            # Try common file extensions
+            extensions = ['.mp3', '.wav', '.zip', '.pdf', '.jpg', '.png'] if is_audio else ['.zip', '.pdf', '.jpg', '.png']
+            
+            for ext in extensions:
+                try:
+                    if is_audio:
+                        file_key = f"{track_id}/stems/{perk_id}{ext}"
+                    else:
+                        file_key = f"{track_id}/perks/{perk_id}{ext}"
+                    
+                    self.s3.delete_object(Bucket=self.bucket_name, Key=file_key)
+                except ClientError:
+                    # Continue trying other extensions if this one fails
+                    continue
+        except ClientError as e:
+            raise Exception(f"Failed to delete perk file: {str(e)}") 

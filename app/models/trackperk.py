@@ -2,6 +2,13 @@ from app.extensions.extension import db
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import datetime
+import enum
+
+class PerkType(enum.Enum):
+    text = "text"
+    url = "url"
+    file = "file"
+    audio = "audio"
 
 class TrackPerk(db.Model):
     __tablename__ = 'track_perks'
@@ -14,5 +21,7 @@ class TrackPerk(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     active = db.Column(db.Boolean, default=False)
+    perk_type = db.Column(db.Enum(PerkType), default=PerkType.text)
+    s3_url = db.Column(db.String, nullable=True)
     
     track = db.relationship('Track', backref=db.backref('perks', lazy=True))
