@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response
 from app.middleware.musician_auth import musician_required
 from app.extensions.extension import db
 from app.models.track import Track, Genre, TrackStatus
@@ -7,7 +7,7 @@ from http import HTTPStatus
 from app.routes.user.user_utils import handle_errors
 import uuid
 import json
-from app.models.trackperk import TrackPerk
+from app.models.trackperk import TrackPerk, PerkType
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import os
@@ -222,7 +222,7 @@ def create_track_perk(current_user, track_id):
     perk = TrackPerk(
         title=data.get('title'),
         description=data.get('description'),
-        url=data.get('url'),
+        s3_url=data.get('url'),
         track_id=track_id,
         active=data.get('active', False)
     )
@@ -236,7 +236,7 @@ def create_track_perk(current_user, track_id):
             'id': perk.id,
             'title': perk.title,
             'description': perk.description,
-            'url': perk.url,
+            's3_url': perk.s3_url,
             'active': perk.active,
             'created_at': perk.created_at.isoformat(),
             'track_id': perk.track_id
@@ -259,7 +259,7 @@ def list_track_perks(current_user, track_id):
         'id': perk.id,
         'title': perk.title,
         'description': perk.description,
-        'url': perk.url,
+        's3_url': perk.s3_url,
         'active': perk.active,
         'created_at': perk.created_at.isoformat(),
         'updated_at': perk.updated_at.isoformat(),
@@ -283,7 +283,7 @@ def get_track_perk(current_user, track_id, perk_id):
         'id': perk.id,
         'title': perk.title,
         'description': perk.description,
-        'url': perk.url,
+        's3_url': perk.s3_url,
         'active': perk.active,
         'created_at': perk.created_at.isoformat(),
         'updated_at': perk.updated_at.isoformat(),
@@ -313,8 +313,8 @@ def update_track_perk(current_user, track_id, perk_id):
         perk.title = data['title']
     if 'description' in data:
         perk.description = data['description']
-    if 'url' in data:
-        perk.url = data['url']
+    if 's3_url' in data:
+        perk.s3_url = data['s3_url']
     if 'active' in data:
         perk.active = data['active']
     
@@ -326,7 +326,7 @@ def update_track_perk(current_user, track_id, perk_id):
             'id': perk.id,
             'title': perk.title,
             'description': perk.description,
-            'url': perk.url,
+            's3_url': perk.s3_url,
             'active': perk.active,
             'updated_at': perk.updated_at.isoformat(),
             'track_id': perk.track_id
@@ -416,8 +416,8 @@ def bulk_update_perks(current_user, track_id):
                     perk.title = perk_data['title']
                 if 'description' in perk_data:
                     perk.description = perk_data['description']
-                if 'url' in perk_data:
-                    perk.url = perk_data['url']
+                if 's3_url' in perk_data:
+                    perk.s3_url = perk_data['s3_url']
                 if 'active' in perk_data:
                     perk.active = perk_data['active']
                 if 'perk_type' in perk_data:
@@ -471,7 +471,7 @@ def bulk_update_perks(current_user, track_id):
                 perk = TrackPerk(
                     title=perk_data.get('title', 'New Perk'),
                     description=perk_data.get('description'),
-                    url=perk_data.get('url'),
+                    s3_url=perk_data.get('s3_url'),
                     track_id=track_id,
                     active=perk_data.get('active', False),
                     perk_type=perk_type,
@@ -516,10 +516,9 @@ def bulk_update_perks(current_user, track_id):
                 'id': str(perk.id),
                 'title': perk.title,
                 'description': perk.description,
-                'url': perk.url,
+                's3_url': perk.s3_url,
                 'active': perk.active,
                 'perk_type': perk.perk_type.name,
-                's3_url': perk.s3_url,
                 'temp_id': perk_data.get('temp_id')  # Return temp_id for frontend reference
             }
             
@@ -558,8 +557,8 @@ def bulk_update_perks(current_user, track_id):
                     perk.title = perk_data['title']
                 if 'description' in perk_data:
                     perk.description = perk_data['description']
-                if 'url' in perk_data:
-                    perk.url = perk_data['url']
+                if 's3_url' in perk_data:
+                    perk.s3_url = perk_data['s3_url']
                 if 'active' in perk_data:
                     perk.active = perk_data['active']
                 if 'perk_type' in perk_data:
@@ -577,11 +576,11 @@ def bulk_update_perks(current_user, track_id):
                 perk = TrackPerk(
                     title=perk_data.get('title', 'New Perk'),
                     description=perk_data.get('description'),
-                    url=perk_data.get('url'),
+                    s3_url=perk_data.get('s3_url'),
                     track_id=track_id,
                     active=perk_data.get('active', False),
                     perk_type=perk_type,
-                    s3_url=perk_data.get('s3_url')
+                    additional_urls={}
                 )
                 
                 db.session.add(perk)
@@ -591,10 +590,9 @@ def bulk_update_perks(current_user, track_id):
                 'id': perk.id,
                 'title': perk.title,
                 'description': perk.description,
-                'url': perk.url,
+                's3_url': perk.s3_url,
                 'active': perk.active,
                 'perk_type': perk.perk_type.name,
-                's3_url': perk.s3_url,
                 'temp_id': perk_data.get('temp_id')  # Return temp_id for frontend reference
             })
         
@@ -603,4 +601,65 @@ def bulk_update_perks(current_user, track_id):
         return jsonify({
             'message': 'Perks updated successfully',
             'perks': updated_perks
-        }), HTTPStatus.OK 
+        }), HTTPStatus.OK
+
+@tracks_bp.route('/<uuid:track_id>/files/stem', methods=['OPTIONS'])
+def handle_stem_options(track_id):
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+    return response, HTTPStatus.OK
+
+@tracks_bp.route('/<uuid:track_id>/files/stem', methods=['POST'])
+@musician_required
+@handle_errors
+def upload_stem_file(current_user, track_id):
+    """Upload a stem file for a track"""
+    # Verify track exists and belongs to the musician
+    track = Track.query.filter_by(id=track_id, artist_id=current_user.id).first()
+    if not track:
+        return jsonify({'message': 'Track not found'}), HTTPStatus.NOT_FOUND
+    
+    # Check if file was uploaded
+    if 'file' not in request.files:
+        return jsonify({'message': 'No file provided'}), HTTPStatus.BAD_REQUEST
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'message': 'No file selected'}), HTTPStatus.BAD_REQUEST
+    
+    # Create a new perk for the stem
+    perk = TrackPerk(
+        title=request.form.get('title', 'Stem'),
+        description=request.form.get('description', 'Downloadable stem file'),
+        track_id=track_id,
+        active=request.form.get('active', 'true').lower() == 'true',
+        perk_type=PerkType.audio
+    )
+    
+    db.session.add(perk)
+    db.session.flush()  # Get the ID without committing
+    
+    # Upload the file to S3
+    try:
+        perk.s3_url = s3_service.upload_perk_file(
+            file, track_id, perk.id, is_audio=True
+        )
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Stem file uploaded successfully',
+            'perk': {
+                'id': str(perk.id),
+                'title': perk.title,
+                'description': perk.description,
+                's3_url': perk.s3_url,
+                'active': perk.active,
+                'perk_type': perk.perk_type.name
+            }
+        }), HTTPStatus.CREATED
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Error uploading stem file: {str(e)}'}), HTTPStatus.INTERNAL_SERVER_ERROR 
