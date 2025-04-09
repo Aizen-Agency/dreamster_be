@@ -80,7 +80,7 @@ class S3Service:
         except (NoCredentialsError, ClientError) as e:
             raise Exception(f"Failed to upload profile picture: {str(e)}")
 
-    def upload_perk_file(self, file, track_id, perk_id, is_audio=False):
+    def upload_perk_file(self, file, track_id, perk_id, is_audio=False, file_index=None):
         try:
             file_extension = os.path.splitext(file.filename)[1]
             
@@ -90,9 +90,19 @@ class S3Service:
             
             # Determine the file path based on whether it's a stem or other perk file
             if is_audio:
-                file_key = f"{track_id}/stems/{perk_id}{file_extension}"
+                # For downloadable stems
+                if file_index is None:
+                    file_key = f"{track_id}/stems/{perk_id}{file_extension}"
+                else:
+                    # For multiple audio files in a single perk
+                    file_key = f"{track_id}/stems/{perk_id}/audio{file_index}{file_extension}"
             else:
-                file_key = f"{track_id}/perks/{perk_id}{file_extension}"
+                # For other perk files
+                if file_index is None:
+                    file_key = f"{track_id}/perks/{perk_id}{file_extension}"
+                else:
+                    # For multiple files in a single perk
+                    file_key = f"{track_id}/perks/{perk_id}/file{file_index}{file_extension}"
             
             extra_args = {
                 'ContentType': content_type
@@ -109,21 +119,53 @@ class S3Service:
         except (NoCredentialsError, ClientError) as e:
             raise Exception(f"Failed to upload perk file: {str(e)}")
 
-    def delete_perk_file(self, track_id, perk_id, is_audio=False):
+    def delete_perk_file(self, track_id, perk_id, is_audio=False, file_index=None):
         try:
             # Try common file extensions
-            extensions = ['.mp3', '.wav', '.zip', '.pdf', '.jpg', '.png'] if is_audio else ['.zip', '.pdf', '.jpg', '.png']
+            extensions = ['.mp3', '.wav'] if is_audio else ['.zip', '.pdf', '.jpg', '.png', '.doc', '.docx']
             
-            for ext in extensions:
+            # If we know there are multiple files, try to delete the specific file
+            if file_index is not None:
+                for ext in extensions:
+                    try:
+                        if is_audio:
+                            file_key = f"{track_id}/stems/{perk_id}/audio{file_index}{ext}"
+                        else:
+                            file_key = f"{track_id}/perks/{perk_id}/file{file_index}{ext}"
+                        
+                        self.s3.delete_object(Bucket=self.bucket_name, Key=file_key)
+                    except ClientError:
+                        # Continue trying other extensions if this one fails
+                        continue
+            else:
+                # Try both the direct file and the directory structure
+                for ext in extensions:
+                    try:
+                        # Try direct file first
+                        if is_audio:
+                            file_key = f"{track_id}/stems/{perk_id}{ext}"
+                        else:
+                            file_key = f"{track_id}/perks/{perk_id}{ext}"
+                        
+                        self.s3.delete_object(Bucket=self.bucket_name, Key=file_key)
+                    except ClientError:
+                        # Continue trying other extensions if this one fails
+                        continue
+                
+                # Also try to delete any files in subdirectories
                 try:
+                    # List all objects with the prefix
                     if is_audio:
-                        file_key = f"{track_id}/stems/{perk_id}{ext}"
+                        prefix = f"{track_id}/stems/{perk_id}/"
                     else:
-                        file_key = f"{track_id}/perks/{perk_id}{ext}"
+                        prefix = f"{track_id}/perks/{perk_id}/"
                     
-                    self.s3.delete_object(Bucket=self.bucket_name, Key=file_key)
+                    response = self.s3.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
+                    
+                    if 'Contents' in response:
+                        for obj in response['Contents']:
+                            self.s3.delete_object(Bucket=self.bucket_name, Key=obj['Key'])
                 except ClientError:
-                    # Continue trying other extensions if this one fails
-                    continue
+                    pass
         except ClientError as e:
             raise Exception(f"Failed to delete perk file: {str(e)}") 
