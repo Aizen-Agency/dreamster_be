@@ -7,7 +7,7 @@ from http import HTTPStatus
 from app.routes.user.user_utils import handle_errors
 import uuid
 import json
-from app.models.trackperk import TrackPerk, PerkType
+from app.models.trackperk import TrackPerk, PerkType, Category
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import os
@@ -218,13 +218,31 @@ def create_track_perk(current_user, track_id):
     if not data or not data.get('title'):
         return jsonify({'message': 'Title is required'}), HTTPStatus.BAD_REQUEST
     
+    # Process category - convert string to enum
+    category = Category.custom  # Default value
+    if 'category' in data:
+        try:
+            category = Category[data['category']]
+        except KeyError:
+            return jsonify({'message': f'Invalid category: {data["category"]}. Valid options are: {[c.name for c in Category]}'}), HTTPStatus.BAD_REQUEST
+    
+    # Process perk type if provided
+    perk_type = PerkType.text  # Default value
+    if 'perkType' in data:
+        try:
+            perk_type = PerkType[data['perkType']]
+        except KeyError:
+            return jsonify({'message': f'Invalid perk type: {data["perkType"]}. Valid options are: {[t.name for t in PerkType]}'}), HTTPStatus.BAD_REQUEST
+    
     # Create new perk
     perk = TrackPerk(
         title=data.get('title'),
         description=data.get('description'),
-        s3_url=data.get('url'),
+        s3_url=data.get('s3_url'),
         track_id=track_id,
-        active=data.get('active', False)
+        active=data.get('active', False),
+        category=category,
+        perk_type=perk_type
     )
     
     db.session.add(perk)
@@ -238,6 +256,8 @@ def create_track_perk(current_user, track_id):
             'description': perk.description,
             's3_url': perk.s3_url,
             'active': perk.active,
+            'category': perk.category.name,
+            'perk_type': perk.perk_type.name,
             'created_at': perk.created_at.isoformat(),
             'track_id': perk.track_id
         }
@@ -311,6 +331,8 @@ def update_track_perk(current_user, track_id, perk_id):
     
     if 'title' in data:
         perk.title = data['title']
+    if 'category' in data:
+        perk.category = Category[data['category']]
     if 'description' in data:
         perk.description = data['description']
     if 's3_url' in data:
@@ -325,6 +347,7 @@ def update_track_perk(current_user, track_id, perk_id):
         'perk': {
             'id': perk.id,
             'title': perk.title,
+            'category': perk.category.name,
             'description': perk.description,
             's3_url': perk.s3_url,
             'active': perk.active,
@@ -397,119 +420,124 @@ def bulk_update_perks(current_user, track_id):
         
         try:
             perks_data = json.loads(perks_json)
+            if not isinstance(perks_data, list):
+                perks_data = []  # Ensure it's a list
         except json.JSONDecodeError:
             return jsonify({'message': 'Invalid JSON format for perks'}), HTTPStatus.BAD_REQUEST
         
         # Process each perk
         updated_perks = []
-        for perk_data in perks_data:
+        for i, perk_data in enumerate(perks_data):
+            print(f"Processing perk {i}, type: {type(perk_data)}")
+            
+            # Skip if not a dictionary
+            if not isinstance(perk_data, dict):
+                print(f"Invalid perk data: {perk_data}")
+                continue
+            
             perk_id = perk_data.get('id')
+            print(f"Perk ID: {perk_id}")
             
             # If perk has an ID, update existing perk
             if perk_id:
-                perk = TrackPerk.query.filter_by(id=perk_id, track_id=track_id).first()
-                if not perk:
-                    continue  # Skip if perk not found
-                
-                # Update perk fields
-                if 'title' in perk_data:
-                    perk.title = perk_data['title']
-                if 'description' in perk_data:
-                    perk.description = perk_data['description']
-                if 's3_url' in perk_data:
-                    perk.s3_url = perk_data['s3_url']
-                if 'active' in perk_data:
-                    perk.active = perk_data['active']
-                if 'perk_type' in perk_data:
-                    try:
-                        perk.perk_type = PerkType[perk_data['perk_type']]
-                    except KeyError:
-                        continue  # Skip invalid perk type
-                
-                # Check if there are multiple files for this perk
-                file_keys = [k for k in request.files.keys() if k.startswith(f"file_{perk_id}_")]
-                
-                if file_keys:
-                    # Handle multiple files
-                    if not perk.additional_urls:
-                        perk.additional_urls = {}
+                try:
+                    # Convert string ID to UUID
+                    perk_uuid = uuid.UUID(perk_id) if isinstance(perk_id, str) else perk_id
+                    perk = TrackPerk.query.filter_by(id=perk_uuid, track_id=track_id).first()
+                    if not perk:
+                        continue  # Skip if perk not found
                     
-                    for i, file_key in enumerate(file_keys):
-                        file = request.files[file_key]
-                        if file and perk.perk_type in [PerkType.file, PerkType.audio]:
-                            # Upload new file with index
-                            is_audio = perk.perk_type == PerkType.audio
-                            file_url = s3_service.upload_perk_file(
-                                file, track_id, perk_id, is_audio=is_audio, file_index=i
+                    # Update perk fields
+                    if 'title' in perk_data:
+                        perk.title = perk_data['title']
+                    if 'description' in perk_data:
+                        perk.description = perk_data['description']
+                    if 's3_url' in perk_data:
+                        perk.s3_url = perk_data['s3_url']
+                    if 'active' in perk_data:
+                        perk.active = perk_data['active']
+                    if 'perk_type' in perk_data:
+                        try:
+                            perk.perk_type = PerkType[perk_data['perk_type']]
+                        except KeyError:
+                            continue  # Skip invalid perk type
+                    
+                    # Check for existing stem by track_id and category
+                    existing_stem = TrackPerk.query.filter_by(
+                        track_id=track_id,
+                        category=Category.stem
+                    ).first()
+                    
+                    if existing_stem:
+                        perk = existing_stem
+                        perk.active = request.form.get('active', 'true').lower() == 'true'
+                        
+                        # Delete the old file if it exists
+                        if perk.s3_url:
+                            try:
+                                s3_service.delete_perk_file(track_id, perk.id, is_audio=True)
+                            except (NoCredentialsError, ClientError) as e:
+                                # Log the error but continue with the upload
+                                print(f"Error deleting old stem file: {str(e)}")
+                    else:
+                        # Create a new perk for the stem
+                        perk = TrackPerk(
+                            title=request.form.get('title', 'Stem'),
+                            description=request.form.get('description', 'Downloadable stem file'),
+                            track_id=track_id,
+                            active=request.form.get('active', 'true').lower() == 'true',
+                            perk_type=PerkType.audio,
+                            category=Category.stem  # Set the correct category
+                        )
+                        
+                        db.session.add(perk)
+                        db.session.flush()  # Get the ID without committing
+                    
+                    # Upload the file to S3
+                    try:
+                        # Create a copy of the file in memory to prevent I/O on closed file
+                        file_content = request.files[f"file_{perk_id}_0"].read()
+                        file_name = request.files[f"file_{perk_id}_0"].filename
+                        
+                        # Create a new file-like object from the content
+                        from io import BytesIO
+                        file_copy = BytesIO(file_content)
+                        file_copy.filename = file_name
+                        
+                        # Upload the file to S3 with the correct path based on category
+                        if perk.category == Category.stem:
+                            # For stem perks, use the stem upload path
+                            perk.s3_url = s3_service.upload_perk_file(
+                                file_copy, track_id, perk.id, is_audio=True
+                            )
+                            perk.perk_type = PerkType.audio
+                        else:
+                            # For custom perks and other categories, use the regular perk path
+                            perk.s3_url = s3_service.upload_perk_file(
+                                file_copy, track_id, perk.id, is_audio=False
                             )
                             
-                            # Store the URL in the appropriate place
-                            if i == 0 and not perk.s3_url:
-                                perk.s3_url = file_url
+                            # Set perk_type based on file mimetype for non-stem files
+                            mime_type, _ = mimetypes.guess_type(file_name)
+                            if mime_type and mime_type.startswith('audio/'):
+                                perk.perk_type = PerkType.audio
+                            elif mime_type and mime_type.startswith('image/'):
+                                perk.perk_type = PerkType.image
+                            elif mime_type and mime_type.startswith('video/'):
+                                perk.perk_type = PerkType.video
                             else:
-                                perk.additional_urls[f"file_{i}"] = file_url
-                else:
-                    # Check for single file (original implementation)
-                    file_key = f"file_{perk_id}"
-                    if file_key in request.files:
-                        file = request.files[file_key]
-                        if file and perk.perk_type in [PerkType.file, PerkType.audio]:
-                            # Delete old file if it exists
-                            if perk.s3_url:
-                                s3_service.delete_perk_file(track_id, perk_id, is_audio=(perk.perk_type == PerkType.audio))
-                            
-                            # Upload new file
-                            is_audio = perk.perk_type == PerkType.audio
-                            perk.s3_url = s3_service.upload_perk_file(file, track_id, perk_id, is_audio=is_audio)
-            else:
-                # Create new perk
-                try:
-                    perk_type = PerkType[perk_data.get('perk_type', 'text')]
-                except KeyError:
-                    perk_type = PerkType.text
+                                perk.perk_type = PerkType.file
+                        
+                        db.session.flush()
+                        print(f"Updated perk {perk.id} with S3 URL: {perk.s3_url}")
+                        
+                    except Exception as e:
+                        print(f"Error uploading file: {str(e)}")
+                        raise e
                 
-                perk = TrackPerk(
-                    title=perk_data.get('title', 'New Perk'),
-                    description=perk_data.get('description'),
-                    s3_url=perk_data.get('s3_url'),
-                    track_id=track_id,
-                    active=perk_data.get('active', False),
-                    perk_type=perk_type,
-                    additional_urls={}
-                )
-                
-                db.session.add(perk)
-                db.session.flush()  # Get the ID without committing
-                
-                # Check for multiple files for new perk
-                temp_id = perk_data.get('temp_id')
-                if temp_id:
-                    file_keys = [k for k in request.files.keys() if k.startswith(f"file_{temp_id}_")]
-                    
-                    if file_keys:
-                        for i, file_key in enumerate(file_keys):
-                            file = request.files[file_key]
-                            if file and perk.perk_type in [PerkType.file, PerkType.audio]:
-                                # Upload new file with index
-                                is_audio = perk.perk_type == PerkType.audio
-                                file_url = s3_service.upload_perk_file(
-                                    file, track_id, perk.id, is_audio=is_audio, file_index=i
-                                )
-                                
-                                # Store the URL in the appropriate place
-                                if i == 0:
-                                    perk.s3_url = file_url
-                                else:
-                                    perk.additional_urls[f"file_{i}"] = file_url
-                    else:
-                        # Check for single file
-                        file_key = f"file_{temp_id}"
-                        if file_key in request.files:
-                            file = request.files[file_key]
-                            if file and perk.perk_type in [PerkType.file, PerkType.audio]:
-                                # Upload new file
-                                is_audio = perk.perk_type == PerkType.audio
-                                perk.s3_url = s3_service.upload_perk_file(file, track_id, perk.id, is_audio=is_audio)
+                except ValueError:
+                    # Handle invalid UUID format
+                    continue
             
             # Prepare response with all URLs
             perk_response = {
@@ -519,16 +547,18 @@ def bulk_update_perks(current_user, track_id):
                 's3_url': perk.s3_url,
                 'active': perk.active,
                 'perk_type': perk.perk_type.name,
+                'category': perk.category.name,
                 'temp_id': perk_data.get('temp_id')  # Return temp_id for frontend reference
             }
-            
-            # Add additional URLs if they exist
-            if perk.additional_urls:
-                perk_response['additional_urls'] = perk.additional_urls
                 
             updated_perks.append(perk_response)
         
         db.session.commit()
+        print(f"Database committed. Checking perk URL: {perk.s3_url}")
+        
+        # Verify the perk was saved correctly
+        saved_perk = TrackPerk.query.get(perk.id)
+        print(f"Saved perk URL from database: {saved_perk.s3_url}")
         
         return jsonify({
             'message': 'Perks updated successfully',
@@ -543,29 +573,43 @@ def bulk_update_perks(current_user, track_id):
         
         # Process each perk
         updated_perks = []
-        for perk_data in perks_data:
+        for i, perk_data in enumerate(perks_data):
+            print(f"Processing perk {i}, type: {type(perk_data)}")
+            
+            # Skip if not a dictionary
+            if not isinstance(perk_data, dict):
+                print(f"Invalid perk data: {perk_data}")
+                continue
+            
             perk_id = perk_data.get('id')
+            print(f"Perk ID: {perk_id}")
             
             # If perk has an ID, update existing perk
             if perk_id:
-                perk = TrackPerk.query.filter_by(id=perk_id, track_id=track_id).first()
-                if not perk:
-                    continue  # Skip if perk not found
-                
-                # Update perk fields
-                if 'title' in perk_data:
-                    perk.title = perk_data['title']
-                if 'description' in perk_data:
-                    perk.description = perk_data['description']
-                if 's3_url' in perk_data:
-                    perk.s3_url = perk_data['s3_url']
-                if 'active' in perk_data:
-                    perk.active = perk_data['active']
-                if 'perk_type' in perk_data:
-                    try:
-                        perk.perk_type = PerkType[perk_data['perk_type']]
-                    except KeyError:
-                        continue  # Skip invalid perk type
+                try:
+                    # Convert string ID to UUID
+                    perk_uuid = uuid.UUID(perk_id) if isinstance(perk_id, str) else perk_id
+                    perk = TrackPerk.query.filter_by(id=perk_uuid, track_id=track_id).first()
+                    if not perk:
+                        continue  # Skip if perk not found
+                    
+                    # Update perk fields
+                    if 'title' in perk_data:
+                        perk.title = perk_data['title']
+                    if 'description' in perk_data:
+                        perk.description = perk_data['description']
+                    if 's3_url' in perk_data:
+                        perk.s3_url = perk_data['s3_url']
+                    if 'active' in perk_data:
+                        perk.active = perk_data['active']
+                    if 'perk_type' in perk_data:
+                        try:
+                            perk.perk_type = PerkType[perk_data['perk_type']]
+                        except KeyError:
+                            continue  # Skip invalid perk type
+                except ValueError:
+                    # Handle invalid UUID format
+                    continue
             else:
                 # Create new perk
                 try:
@@ -579,8 +623,7 @@ def bulk_update_perks(current_user, track_id):
                     s3_url=perk_data.get('s3_url'),
                     track_id=track_id,
                     active=perk_data.get('active', False),
-                    perk_type=perk_type,
-                    additional_urls={}
+                    perk_type=perk_type
                 )
                 
                 db.session.add(perk)
@@ -629,17 +672,37 @@ def upload_stem_file(current_user, track_id):
     if file.filename == '':
         return jsonify({'message': 'No file selected'}), HTTPStatus.BAD_REQUEST
     
-    # Create a new perk for the stem
-    perk = TrackPerk(
-        title=request.form.get('title', 'Stem'),
-        description=request.form.get('description', 'Downloadable stem file'),
+    # Check for existing stem by track_id and category
+    existing_stem = TrackPerk.query.filter_by(
         track_id=track_id,
-        active=request.form.get('active', 'true').lower() == 'true',
-        perk_type=PerkType.audio
-    )
+        category=Category.stem
+    ).first()
     
-    db.session.add(perk)
-    db.session.flush()  # Get the ID without committing
+    # If stem already exists, update it instead of creating a new one
+    if existing_stem:
+        perk = existing_stem
+        perk.active = request.form.get('active', 'true').lower() == 'true'
+        
+        # Delete the old file if it exists
+        if perk.s3_url:
+            try:
+                s3_service.delete_perk_file(track_id, perk.id, is_audio=True)
+            except (NoCredentialsError, ClientError) as e:
+                # Log the error but continue with the upload
+                print(f"Error deleting old stem file: {str(e)}")
+    else:
+        # Create a new perk for the stem
+        perk = TrackPerk(
+            title=request.form.get('title', 'Stem'),
+            description=request.form.get('description', 'Downloadable stem file'),
+            track_id=track_id,
+            active=request.form.get('active', 'true').lower() == 'true',
+            perk_type=PerkType.audio,
+            category=Category.stem  # Set the correct category
+        )
+        
+        db.session.add(perk)
+        db.session.flush()  # Get the ID without committing
     
     # Upload the file to S3
     try:
@@ -657,9 +720,138 @@ def upload_stem_file(current_user, track_id):
                 'description': perk.description,
                 's3_url': perk.s3_url,
                 'active': perk.active,
-                'perk_type': perk.perk_type.name
+                'perk_type': perk.perk_type.name,
+                'category': perk.category.name
             }
         }), HTTPStatus.CREATED
     except Exception as e:
         db.session.rollback()
-        return jsonify({'message': f'Error uploading stem file: {str(e)}'}), HTTPStatus.INTERNAL_SERVER_ERROR 
+        return jsonify({'message': f'Error uploading stem file: {str(e)}'}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@tracks_bp.route('/<uuid:track_id>/files/stem', methods=['GET'])
+@musician_required
+@handle_errors
+def get_track_stems(current_user, track_id):
+    stems = TrackPerk.query.filter_by(
+        track_id=track_id,
+        category=Category.stem
+    ).all()
+    
+    return jsonify([{
+        'id': stem.id,
+        'title': stem.title,
+        'description': stem.description,
+        's3_url': stem.s3_url,
+        'active': stem.active,
+        'perk_type': stem.perk_type.name,
+        'category': stem.category.name
+    } for stem in stems]), HTTPStatus.OK
+
+@tracks_bp.route('/<uuid:track_id>/perks/<uuid:perk_id>/file', methods=['POST'])
+@musician_required
+@handle_errors
+def upload_perk_file(current_user, track_id, perk_id):
+    """Upload a file for a specific track perk"""
+    # Add more detailed logging
+    print(f"Starting file upload for track {track_id}, perk {perk_id}")
+    print(f"Request content type: {request.content_type}")
+    print(f"Request files: {request.files.keys()}")
+    print(f"Request form data: {request.form}")
+    
+    # Verify track exists and belongs to the musician
+    track = Track.query.filter_by(id=track_id, artist_id=current_user.id).first()
+    if not track:
+        return jsonify({'message': 'Track not found'}), HTTPStatus.NOT_FOUND
+    
+    # Get the specific perk
+    perk = TrackPerk.query.filter_by(id=perk_id, track_id=track_id).first()
+    if not perk:
+        return jsonify({'message': 'Perk not found'}), HTTPStatus.NOT_FOUND
+    
+    # Check if file was uploaded
+    if 'file' not in request.files:
+        print("No 'file' in request.files")
+        return jsonify({'message': 'No file provided'}), HTTPStatus.BAD_REQUEST
+    
+    file = request.files['file']
+    print(f"File name: {file.filename}, content type: {file.content_type}")
+    
+    if file.filename == '':
+        return jsonify({'message': 'No file selected'}), HTTPStatus.BAD_REQUEST
+    
+    try:
+        # Determine if this is a stem file based on the perk's category
+        is_stem = perk.category == Category.stem
+        print(f"Perk category: {perk.category}, is_stem: {is_stem}")
+        
+        # Create a copy of the file in memory
+        file_content = file.read()
+        if not file_content:
+            print("File content is empty")
+            return jsonify({'message': 'Empty file'}), HTTPStatus.BAD_REQUEST
+            
+        print(f"File content length: {len(file_content)} bytes")
+        
+        # Create a new file-like object
+        from io import BytesIO
+        file_copy = BytesIO(file_content)
+        file_copy.filename = file.filename
+        
+        # Determine file type
+        mime_type, _ = mimetypes.guess_type(file.filename)
+        print(f"Detected MIME type: {mime_type}")
+        
+        # Set is_audio based on file type
+        is_audio = False
+        if is_stem:
+            is_audio = True
+            perk.perk_type = PerkType.audio
+        elif mime_type and mime_type.startswith('audio/'):
+            is_audio = True
+            perk.perk_type = PerkType.audio
+        elif mime_type and mime_type.startswith('image/'):
+            perk.perk_type = PerkType.image
+        elif mime_type and mime_type.startswith('video/'):
+            perk.perk_type = PerkType.video
+        else:
+            perk.perk_type = PerkType.file
+        
+        print(f"Set perk_type to {perk.perk_type}, is_audio: {is_audio}")
+        
+        # Delete old file if it exists
+        if perk.s3_url:
+            try:
+                print(f"Deleting old file: {perk.s3_url}")
+                s3_service.delete_perk_file(track_id, perk.id, is_audio=is_audio)
+            except Exception as e:
+                print(f"Error deleting old file: {str(e)}")
+                # Continue with upload even if delete fails
+        
+        # Upload to S3
+        print(f"Uploading file to S3, is_audio: {is_audio}")
+        perk.s3_url = s3_service.upload_perk_file(
+            file_copy, track_id, perk.id, is_audio=is_audio
+        )
+        print(f"File uploaded successfully, S3 URL: {perk.s3_url}")
+        
+        db.session.commit()
+        print("Database updated successfully")
+        
+        return jsonify({
+            'message': 'File uploaded successfully',
+            'perk': {
+                'id': str(perk.id),
+                'title': perk.title,
+                'description': perk.description,
+                's3_url': perk.s3_url,
+                'active': perk.active,
+                'perk_type': perk.perk_type.name,
+                'category': perk.category.name
+            }
+        }), HTTPStatus.OK
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error during file upload: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'message': f'Error uploading file: {str(e)}'}), HTTPStatus.INTERNAL_SERVER_ERROR 

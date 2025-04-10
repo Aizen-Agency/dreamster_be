@@ -82,6 +82,9 @@ class S3Service:
 
     def upload_perk_file(self, file, track_id, perk_id, is_audio=False, file_index=None):
         try:
+            # Reset file position to beginning
+            file.seek(0)
+            
             file_extension = os.path.splitext(file.filename)[1]
             
             content_type = mimetypes.guess_type(file.filename)[0]
@@ -104,6 +107,9 @@ class S3Service:
                     # For multiple files in a single perk
                     file_key = f"{track_id}/perks/{perk_id}/file{file_index}{file_extension}"
             
+            print(f"S3 file key: {file_key}")
+            print(f"Content type: {content_type}")
+            
             extra_args = {
                 'ContentType': content_type
             }
@@ -117,7 +123,11 @@ class S3Service:
             
             return f"https://{self.bucket_name}.s3.{self.region}.amazonaws.com/{file_key}"
         except (NoCredentialsError, ClientError) as e:
+            print(f"S3 upload error: {str(e)}")
             raise Exception(f"Failed to upload perk file: {str(e)}")
+        except Exception as e:
+            print(f"Unexpected error in upload_perk_file: {str(e)}")
+            raise Exception(f"Unexpected error uploading file: {str(e)}")
 
     def delete_perk_file(self, track_id, perk_id, is_audio=False, file_index=None):
         try:

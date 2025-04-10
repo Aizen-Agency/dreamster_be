@@ -9,12 +9,24 @@ class PerkType(enum.Enum):
     url = "url"
     file = "file"
     audio = "audio"
+    image = "image"
+    video = "video"
+
+class Category(enum.Enum):
+    exclusive = "exclusive"
+    custom = "custom"
+    stem = "stem"
+    discord = "discord"
+    instrumental = "instrumental"
+    vocal = "vocal"
+    other = "other"
 
 class TrackPerk(db.Model):
     __tablename__ = 'track_perks'
     
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = db.Column(db.String, nullable=False)
+    category = db.Column(db.Enum(Category), default=Category.custom)
     description = db.Column(db.Text)
     track_id = db.Column(UUID(as_uuid=True), db.ForeignKey('tracks.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
