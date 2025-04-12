@@ -408,9 +408,6 @@ def bulk_update_perks(current_user, track_id):
     if not track:
         return jsonify({'message': 'Track not found'}), HTTPStatus.NOT_FOUND
     
-    # Process each perk in the request
-    perks_data = []
-    
     # Check if it's a multipart form (file uploads) or JSON
     if request.content_type and 'multipart/form-data' in request.content_type:
         # Parse the perks JSON from the form
@@ -421,22 +418,17 @@ def bulk_update_perks(current_user, track_id):
         try:
             perks_data = json.loads(perks_json)
             if not isinstance(perks_data, list):
-                perks_data = []  # Ensure it's a list
+                perks_data = []
         except json.JSONDecodeError:
             return jsonify({'message': 'Invalid JSON format for perks'}), HTTPStatus.BAD_REQUEST
         
         # Process each perk
         updated_perks = []
-        for i, perk_data in enumerate(perks_data):
-            print(f"Processing perk {i}, type: {type(perk_data)}")
-            
-            # Skip if not a dictionary
+        for perk_data in perks_data:
             if not isinstance(perk_data, dict):
-                print(f"Invalid perk data: {perk_data}")
                 continue
             
             perk_id = perk_data.get('id')
-            print(f"Perk ID: {perk_id}")
             
             # If perk has an ID, update existing perk
             if perk_id:
@@ -462,64 +454,19 @@ def bulk_update_perks(current_user, track_id):
                         except KeyError:
                             continue  # Skip invalid perk type
                     
-                    # Check for existing stem by track_id and category
-                    existing_stem = TrackPerk.query.filter_by(
-                        track_id=track_id,
-                        category=Category.stem
-                    ).first()
+                    # Check for file uploads - look for all files with this perk_id
+                    file_keys = [key for key in request.files.keys() if key.startswith(f"file_{perk_id}_")]
                     
-                    if existing_stem:
-                        perk = existing_stem
-                        perk.active = request.form.get('active', 'true').lower() == 'true'
-                        
-                        # Delete the old file if it exists
-                        if perk.s3_url:
-                            try:
-                                s3_service.delete_perk_file(track_id, perk.id, is_audio=True)
-                            except (NoCredentialsError, ClientError) as e:
-                                # Log the error but continue with the upload
-                                print(f"Error deleting old stem file: {str(e)}")
-                    else:
-                        # Create a new perk for the stem
-                        perk = TrackPerk(
-                            title=request.form.get('title', 'Stem'),
-                            description=request.form.get('description', 'Downloadable stem file'),
-                            track_id=track_id,
-                            active=request.form.get('active', 'true').lower() == 'true',
-                            perk_type=PerkType.audio,
-                            category=Category.stem  # Set the correct category
-                        )
-                        
-                        db.session.add(perk)
-                        db.session.flush()  # Get the ID without committing
-                    
-                    # Upload the file to S3
-                    try:
-                        # Create a copy of the file in memory to prevent I/O on closed file
-                        file_content = request.files[f"file_{perk_id}_0"].read()
-                        file_name = request.files[f"file_{perk_id}_0"].filename
-                        
-                        # Create a new file-like object from the content
-                        from io import BytesIO
-                        file_copy = BytesIO(file_content)
-                        file_copy.filename = file_name
-                        
-                        # Upload the file to S3 with the correct path based on category
-                        if perk.category == Category.stem:
-                            # For stem perks, use the stem upload path
-                            perk.s3_url = s3_service.upload_perk_file(
-                                file_copy, track_id, perk.id, is_audio=True
-                            )
-                            perk.perk_type = PerkType.audio
-                        else:
-                            # For custom perks and other categories, use the regular perk path
-                            perk.s3_url = s3_service.upload_perk_file(
-                                file_copy, track_id, perk.id, is_audio=False
-                            )
+                    for file_key in file_keys:
+                        file = request.files[file_key]
+                        if file and file.filename:
+                            # Determine file type based on mimetype
+                            mime_type, _ = mimetypes.guess_type(file.filename)
                             
-                            # Set perk_type based on file mimetype for non-stem files
-                            mime_type, _ = mimetypes.guess_type(file_name)
+                            # Set perk_type based on file mimetype
+                            is_audio = False
                             if mime_type and mime_type.startswith('audio/'):
+                                is_audio = True
                                 perk.perk_type = PerkType.audio
                             elif mime_type and mime_type.startswith('image/'):
                                 perk.perk_type = PerkType.image
@@ -527,19 +474,81 @@ def bulk_update_perks(current_user, track_id):
                                 perk.perk_type = PerkType.video
                             else:
                                 perk.perk_type = PerkType.file
-                        
-                        db.session.flush()
-                        print(f"Updated perk {perk.id} with S3 URL: {perk.s3_url}")
-                        
-                    except Exception as e:
-                        print(f"Error uploading file: {str(e)}")
-                        raise e
-                
+                            
+                            # Extract counter from file_key (file_perkId_counter)
+                            try:
+                                counter = int(file_key.split('_')[-1])
+                            except (ValueError, IndexError):
+                                counter = 0
+                            
+                            # Upload to S3 with the appropriate counter
+                            perk.s3_url = s3_service.upload_perk_file(
+                                file, track_id, perk.id, 
+                                is_audio=is_audio,
+                                file_index=counter if counter > 0 else None,
+                                is_stem_category=perk.category == Category.stem
+                            )
                 except ValueError:
                     # Handle invalid UUID format
                     continue
+            else:
+                # Create new perk
+                try:
+                    perk_type = PerkType[perk_data.get('perk_type', 'text')]
+                except KeyError:
+                    perk_type = PerkType.text
+                
+                perk = TrackPerk(
+                    title=perk_data.get('title', 'New Perk'),
+                    description=perk_data.get('description'),
+                    s3_url=perk_data.get('s3_url'),
+                    track_id=track_id,
+                    active=perk_data.get('active', False),
+                    perk_type=perk_type,
+                    category=Category.custom
+                )
+                
+                db.session.add(perk)
+                db.session.flush()  # Get the ID without committing
+                
+                # Check for file uploads with temp_id
+                temp_id = perk_data.get('temp_id')
+                if temp_id:
+                    file_keys = [key for key in request.files.keys() if key.startswith(f"file_{temp_id}_")]
+                    
+                    for file_key in file_keys:
+                        file = request.files[file_key]
+                        if file and file.filename:
+                            # Determine file type based on mimetype
+                            mime_type, _ = mimetypes.guess_type(file.filename)
+                            
+                            # Set perk_type based on file mimetype
+                            is_audio = False
+                            if mime_type and mime_type.startswith('audio/'):
+                                is_audio = True
+                                perk.perk_type = PerkType.audio
+                            elif mime_type and mime_type.startswith('image/'):
+                                perk.perk_type = PerkType.image
+                            elif mime_type and mime_type.startswith('video/'):
+                                perk.perk_type = PerkType.video
+                            else:
+                                perk.perk_type = PerkType.file
+                            
+                            # Extract counter from file_key
+                            try:
+                                counter = int(file_key.split('_')[-1])
+                            except (ValueError, IndexError):
+                                counter = 0
+                            
+                            # Upload to S3
+                            perk.s3_url = s3_service.upload_perk_file(
+                                file, track_id, perk.id, 
+                                is_audio=is_audio,
+                                file_index=counter if counter > 0 else None,
+                                is_stem_category=perk.category == Category.stem
+                            )
             
-            # Prepare response with all URLs
+            # Prepare response
             perk_response = {
                 'id': str(perk.id),
                 'title': perk.title,
@@ -554,17 +563,13 @@ def bulk_update_perks(current_user, track_id):
             updated_perks.append(perk_response)
         
         db.session.commit()
-        print(f"Database committed. Checking perk URL: {perk.s3_url}")
-        
-        # Verify the perk was saved correctly
-        saved_perk = TrackPerk.query.get(perk.id)
-        print(f"Saved perk URL from database: {saved_perk.s3_url}")
         
         return jsonify({
             'message': 'Perks updated successfully',
             'perks': updated_perks
         }), HTTPStatus.OK
     else:
+        # Handle JSON-only updates (no file uploads)
         data = request.get_json()
         if not data or 'perks' not in data:
             return jsonify({'message': 'No perks data provided'}), HTTPStatus.BAD_REQUEST
@@ -573,16 +578,11 @@ def bulk_update_perks(current_user, track_id):
         
         # Process each perk
         updated_perks = []
-        for i, perk_data in enumerate(perks_data):
-            print(f"Processing perk {i}, type: {type(perk_data)}")
-            
-            # Skip if not a dictionary
+        for perk_data in perks_data:
             if not isinstance(perk_data, dict):
-                print(f"Invalid perk data: {perk_data}")
                 continue
             
             perk_id = perk_data.get('id')
-            print(f"Perk ID: {perk_id}")
             
             # If perk has an ID, update existing perk
             if perk_id:
@@ -707,7 +707,9 @@ def upload_stem_file(current_user, track_id):
     # Upload the file to S3
     try:
         perk.s3_url = s3_service.upload_perk_file(
-            file, track_id, perk.id, is_audio=True
+            file, track_id, perk.id, 
+            is_audio=True,
+            is_stem_category=True
         )
         
         db.session.commit()
@@ -751,8 +753,7 @@ def get_track_stems(current_user, track_id):
 @musician_required
 @handle_errors
 def upload_perk_file(current_user, track_id, perk_id):
-    """Upload a file for a specific track perk"""
-    # Add more detailed logging
+    """Upload a file for a specific track perk (custom perks only, not stems)"""
     print(f"Starting file upload for track {track_id}, perk {perk_id}")
     print(f"Request content type: {request.content_type}")
     print(f"Request files: {request.files.keys()}")
@@ -768,6 +769,10 @@ def upload_perk_file(current_user, track_id, perk_id):
     if not perk:
         return jsonify({'message': 'Perk not found'}), HTTPStatus.NOT_FOUND
     
+    # Verify this is not a stem perk - stems should use the dedicated stem API
+    if perk.category == Category.stem:
+        return jsonify({'message': 'Stem files should be uploaded using the stem API endpoint'}), HTTPStatus.BAD_REQUEST
+    
     # Check if file was uploaded
     if 'file' not in request.files:
         print("No 'file' in request.files")
@@ -780,10 +785,6 @@ def upload_perk_file(current_user, track_id, perk_id):
         return jsonify({'message': 'No file selected'}), HTTPStatus.BAD_REQUEST
     
     try:
-        # Determine if this is a stem file based on the perk's category
-        is_stem = perk.category == Category.stem
-        print(f"Perk category: {perk.category}, is_stem: {is_stem}")
-        
         # Create a copy of the file in memory
         file_content = file.read()
         if not file_content:
@@ -801,12 +802,9 @@ def upload_perk_file(current_user, track_id, perk_id):
         mime_type, _ = mimetypes.guess_type(file.filename)
         print(f"Detected MIME type: {mime_type}")
         
-        # Set is_audio based on file type
+        # Set perk_type based on file type
         is_audio = False
-        if is_stem:
-            is_audio = True
-            perk.perk_type = PerkType.audio
-        elif mime_type and mime_type.startswith('audio/'):
+        if mime_type and mime_type.startswith('audio/'):
             is_audio = True
             perk.perk_type = PerkType.audio
         elif mime_type and mime_type.startswith('image/'):
@@ -830,7 +828,9 @@ def upload_perk_file(current_user, track_id, perk_id):
         # Upload to S3
         print(f"Uploading file to S3, is_audio: {is_audio}")
         perk.s3_url = s3_service.upload_perk_file(
-            file_copy, track_id, perk.id, is_audio=is_audio
+            file_copy, track_id, perk.id, 
+            is_audio=is_audio,
+            is_stem_category=False  # Always false since we're not handling stems
         )
         print(f"File uploaded successfully, S3 URL: {perk.s3_url}")
         

@@ -80,7 +80,7 @@ class S3Service:
         except (NoCredentialsError, ClientError) as e:
             raise Exception(f"Failed to upload profile picture: {str(e)}")
 
-    def upload_perk_file(self, file, track_id, perk_id, is_audio=False, file_index=None):
+    def upload_perk_file(self, file, track_id, perk_id, is_audio=False, file_index=None, is_stem_category=None):
         try:
             # Reset file position to beginning
             file.seek(0)
@@ -91,21 +91,28 @@ class S3Service:
             if content_type is None:
                 content_type = 'audio/mpeg' if is_audio else 'application/octet-stream'
             
-            # Determine the file path based on whether it's a stem or other perk file
-            if is_audio:
-                # For downloadable stems
+            # Check if we need to determine the stem category from the database
+            if is_stem_category is None and perk_id:
+                # Import here to avoid circular imports
+                from app.models.trackperk import TrackPerk, Category
+                perk = TrackPerk.query.get(perk_id)
+                is_stem_category = perk and perk.category == Category.stem
+            
+            # Determine the file path based on category and file type
+            if is_stem_category:
+                # For stem files (always audio)
                 if file_index is None:
                     file_key = f"{track_id}/stems/{perk_id}{file_extension}"
                 else:
-                    # For multiple audio files in a single perk
                     file_key = f"{track_id}/stems/{perk_id}/audio{file_index}{file_extension}"
             else:
-                # For other perk files
+                # For all other perk files (including custom audio)
                 if file_index is None:
                     file_key = f"{track_id}/perks/{perk_id}{file_extension}"
                 else:
-                    # For multiple files in a single perk
-                    file_key = f"{track_id}/perks/{perk_id}/file{file_index}{file_extension}"
+                    # Use appropriate prefix based on file type
+                    prefix = "audio" if is_audio else "file"
+                    file_key = f"{track_id}/perks/{perk_id}/{prefix}{file_index}{file_extension}"
             
             print(f"S3 file key: {file_key}")
             print(f"Content type: {content_type}")
