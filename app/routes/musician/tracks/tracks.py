@@ -115,16 +115,30 @@ def get_track_details(current_user, track_id):
     track = Track.query.filter_by(id=track_id, artist_id=current_user.id).first()
     if not track:
         return jsonify({'message': 'Track not found'}), HTTPStatus.NOT_FOUND
+    
+    # Get collaborators
+    from app.models.collaborator import Collaborator
+    collaborators = Collaborator.query.filter_by(track_id=track_id).all()
+    collaborators_data = [{
+        'id': str(collab.id),
+        'user_id': str(collab.user_id),
+        'username': collab.user.username,
+        'split_share': float(collab.split_share),
+        'wallet_address': collab.wallet_address
+    } for collab in collaborators]
+    
     return jsonify({
-        'id': track.id,
+        'id': str(track.id),
         'title': track.title,
         'description': track.description,
         'genre': track.genre.name if track.genre else None,
         'tags': track.tags,
-        'starting_price': track.starting_price,
+        'starting_price': float(track.starting_price) if track.starting_price else 0,
         'created_at': track.created_at.isoformat(),
         'updated_at': track.updated_at.isoformat(),
-        's3_url': track.s3_url
+        's3_url': track.s3_url,
+        'exclusive': track.exclusive,
+        'collaborators': collaborators_data
     }), HTTPStatus.OK
 
 @tracks_bp.route('/<uuid:track_id>', methods=['PUT'])
