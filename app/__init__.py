@@ -76,6 +76,7 @@ def create_app(config_name='default'):
     from app.models.user import User, UserRole
     from app.models.track import Track
     from app.models.trackperk import TrackPerk
+    from app.models.collaborator import Collaborator
     
     # Create database tables
     with app.app_context():

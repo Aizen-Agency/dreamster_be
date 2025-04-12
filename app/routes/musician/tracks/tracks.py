@@ -13,6 +13,8 @@ from datetime import datetime
 import os
 import mimetypes
 from botocore.exceptions import NoCredentialsError, ClientError
+from app.models.user import User
+from app.models.collaborator import Collaborator
 
 tracks_bp = Blueprint('tracks', __name__, url_prefix='/api/musician/tracks')
 s3_service = S3Service(bucket_name='dreamster-tracks')
@@ -170,21 +172,85 @@ def update_track(current_user, track_id):
     
     if 'exclusive' in request.json:
         track.exclusive = bool(request.json.get('exclusive'))
+    
+    # Handle collaborators if provided
+    if 'collaborators' in request.json and isinstance(request.json['collaborators'], list):
+        from app.models.collaborator import Collaborator
+        
+        # Process each collaborator
+        for collab_data in request.json['collaborators']:
+            if not isinstance(collab_data, dict):
+                continue
+                
+            # Validate required fields
+            if 'user_id' not in collab_data or 'split_share' not in collab_data:
+                continue
+                
+            try:
+                # Convert string ID to UUID if needed
+                user_id = uuid.UUID(collab_data['user_id']) if isinstance(collab_data['user_id'], str) else collab_data['user_id']
+                
+                # Validate user exists
+                user = User.query.get(user_id)
+                if not user:
+                    continue
+                    
+                # Validate split_share is a number between 0 and 100
+                split_share = float(collab_data['split_share'])
+                if split_share <= 0 or split_share > 100:
+                    continue
+                    
+                # Check if collaborator already exists
+                existing_collab = Collaborator.query.filter_by(
+                    track_id=track_id,
+                    user_id=user_id
+                ).first()
+                
+                if existing_collab:
+                    # Update existing collaborator
+                    existing_collab.split_share = split_share
+                    if 'wallet_address' in collab_data:
+                        existing_collab.wallet_address = collab_data['wallet_address']
+                else:
+                    # Create new collaborator
+                    new_collab = Collaborator(
+                        track_id=track_id,
+                        user_id=user_id,
+                        split_share=split_share,
+                        wallet_address=collab_data.get('wallet_address')
+                    )
+                    db.session.add(new_collab)
+                    
+            except (ValueError, TypeError):
+                # Skip invalid entries
+                continue
 
     db.session.commit()
+    
+    # Get updated collaborators for response
+    from app.models.collaborator import Collaborator
+    collaborators = Collaborator.query.filter_by(track_id=track_id).all()
+    collaborators_data = [{
+        'id': str(collab.id),
+        'user_id': str(collab.user_id),
+        'username': collab.user.username,
+        'split_share': float(collab.split_share),
+        'wallet_address': collab.wallet_address
+    } for collab in collaborators]
     
     # Return the updated track data
     return jsonify({
         'message': 'Track updated successfully',
         'track': {
-            'id': track.id,
+            'id': str(track.id),
             'title': track.title,
             'description': track.description,
             'genre': track.genre.name if track.genre else None,
             'tags': track.tags,
             'starting_price': float(track.starting_price) if track.starting_price else 0,
             's3_url': track.s3_url,
-            'exclusive': track.exclusive
+            'exclusive': track.exclusive,
+            'collaborators': collaborators_data
         }
     }), HTTPStatus.OK
 
