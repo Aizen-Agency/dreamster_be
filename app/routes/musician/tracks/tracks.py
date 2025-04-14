@@ -195,46 +195,64 @@ def update_track(current_user, track_id):
         for collab_data in request.json['collaborators']:
             if not isinstance(collab_data, dict):
                 continue
-                
-            # Validate required fields
-            if 'user_id' not in collab_data or 'split_share' not in collab_data:
+            
+            # Check if we have either user_id or wallet_address and split_share
+            if 'split_share' not in collab_data:
                 continue
-                
+            
             try:
-                # Convert string ID to UUID if needed
-                user_id = uuid.UUID(collab_data['user_id']) if isinstance(collab_data['user_id'], str) else collab_data['user_id']
-                
-                # Validate user exists
-                user = User.query.get(user_id)
-                if not user:
-                    continue
-                    
                 # Validate split_share is a number between 0 and 100
                 split_share = float(collab_data['split_share'])
                 if split_share <= 0 or split_share > 100:
                     continue
                     
+                # Get wallet address if provided
+                wallet_address = collab_data.get('wallet_address')
+                
+                # Get user_id if provided
+                user_id = None
+                if 'user_id' in collab_data:
+                    user_id = uuid.UUID(collab_data['user_id']) if isinstance(collab_data['user_id'], str) else collab_data['user_id']
+                    
+                    # Validate user exists if user_id is provided
+                    user = User.query.get(user_id)
+                    if not user:
+                        continue
+                
                 # Check if collaborator already exists
-                existing_collab = Collaborator.query.filter_by(
-                    track_id=track_id,
-                    user_id=user_id
-                ).first()
+                existing_collab = None
+                if user_id:
+                    existing_collab = Collaborator.query.filter_by(
+                        track_id=track_id,
+                        user_id=user_id
+                    ).first()
+                elif wallet_address:
+                    existing_collab = Collaborator.query.filter_by(
+                        track_id=track_id,
+                        wallet_address=wallet_address
+                    ).first()
                 
                 if existing_collab:
                     # Update existing collaborator
                     existing_collab.split_share = split_share
-                    if 'wallet_address' in collab_data:
-                        existing_collab.wallet_address = collab_data['wallet_address']
+                    if wallet_address:
+                        existing_collab.wallet_address = wallet_address
                 else:
                     # Create new collaborator
+                    # For now, we'll use a placeholder user_id if none is provided
+                    # This is a temporary solution until the database schema is updated
+                    if not user_id:
+                        # Use the track owner as a temporary placeholder
+                        user_id = track.artist_id
+                    
                     new_collab = Collaborator(
                         track_id=track_id,
                         user_id=user_id,
                         split_share=split_share,
-                        wallet_address=collab_data.get('wallet_address')
+                        wallet_address=wallet_address
                     )
                     db.session.add(new_collab)
-                    
+                
             except (ValueError, TypeError):
                 # Skip invalid entries
                 continue

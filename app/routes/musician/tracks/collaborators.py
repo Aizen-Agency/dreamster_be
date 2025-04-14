@@ -50,38 +50,62 @@ def add_collaborator(current_user, track_id):
     if not data:
         return jsonify({'message': 'No data provided'}), HTTPStatus.BAD_REQUEST
     
-    if 'user_id' not in data or 'split_share' not in data:
-        return jsonify({'message': 'User ID and split share are required'}), HTTPStatus.BAD_REQUEST
+    # Check if we have either user_id or wallet_address
+    if 'user_id' not in data and 'wallet_address' not in data:
+        return jsonify({'message': 'Either user ID or wallet address is required'}), HTTPStatus.BAD_REQUEST
+    
+    if 'split_share' not in data:
+        return jsonify({'message': 'Split share is required'}), HTTPStatus.BAD_REQUEST
     
     try:
-        # Convert string ID to UUID if needed
-        user_id = uuid.UUID(data['user_id']) if isinstance(data['user_id'], str) else data['user_id']
-        
-        # Validate user exists
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({'message': 'User not found'}), HTTPStatus.NOT_FOUND
-        
         # Validate split_share is a number between 0 and 100
         split_share = float(data['split_share'])
         if split_share <= 0 or split_share > 100:
             return jsonify({'message': 'Split share must be between 0 and 100'}), HTTPStatus.BAD_REQUEST
         
+        user_id = None
+        user = None
+        
+        # Process user_id if provided
+        if 'user_id' in data:
+            # Convert string ID to UUID if needed
+            user_id = uuid.UUID(data['user_id']) if isinstance(data['user_id'], str) else data['user_id']
+            
+            # Validate user exists
+            user = User.query.get(user_id)
+            if not user:
+                return jsonify({'message': 'User not found'}), HTTPStatus.NOT_FOUND
+        
+        wallet_address = data.get('wallet_address')
+        
         # Check if collaborator already exists
-        existing_collab = Collaborator.query.filter_by(
-            track_id=track_id,
-            user_id=user_id
-        ).first()
+        existing_collab = None
+        if user_id:
+            existing_collab = Collaborator.query.filter_by(
+                track_id=track_id,
+                user_id=user_id
+            ).first()
+        elif wallet_address:
+            existing_collab = Collaborator.query.filter_by(
+                track_id=track_id,
+                wallet_address=wallet_address
+            ).first()
         
         if existing_collab:
             return jsonify({'message': 'Collaborator already exists for this track'}), HTTPStatus.CONFLICT
+        
+        # If we don't have a user_id but need one for the database constraint,
+        # use the track owner as a placeholder
+        if not user_id:
+            user_id = track.artist_id
+            user = User.query.get(user_id)
         
         # Create new collaborator
         new_collab = Collaborator(
             track_id=track_id,
             user_id=user_id,
             split_share=split_share,
-            wallet_address=data.get('wallet_address')
+            wallet_address=wallet_address
         )
         
         db.session.add(new_collab)
@@ -92,15 +116,15 @@ def add_collaborator(current_user, track_id):
             'collaborator': {
                 'id': str(new_collab.id),
                 'user_id': str(new_collab.user_id),
-                'username': user.username,
+                'username': user.username if user else None,
                 'split_share': float(new_collab.split_share),
                 'wallet_address': new_collab.wallet_address,
                 'created_at': new_collab.created_at.isoformat()
             }
         }), HTTPStatus.CREATED
         
-    except (ValueError, TypeError):
-        return jsonify({'message': 'Invalid data format'}), HTTPStatus.BAD_REQUEST
+    except (ValueError, TypeError) as e:
+        return jsonify({'message': f'Invalid input format: {str(e)}'}), HTTPStatus.BAD_REQUEST
 
 @collaborators_bp.route('/<uuid:track_id>/collaborators/<uuid:collaborator_id>', methods=['PUT'])
 @musician_required
