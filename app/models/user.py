@@ -22,6 +22,7 @@ class User(db.Model):
     profile_picture_url = db.Column(db.String, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    wallet_address = db.Column(db.String(255), nullable=True, unique=True)
     
     @property
     def password(self):

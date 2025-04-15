@@ -44,6 +44,7 @@ class Track(db.Model):
     status = db.Column(db.Enum(TrackStatus), default=TrackStatus.pending)
     rejection_reason = db.Column(db.Text)
     exclusive = db.Column(db.Boolean, default=False)
+    sales_count = db.Column(db.Integer, default=0)
     
     def increment_stream_count(self):
         """Increment the stream count and save to database"""

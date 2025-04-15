@@ -56,6 +56,10 @@ def create_app(config_name='default'):
     from app.routes.admin.track_approval import track_approval_bp
     from app.routes.admin.track_management import track_management_bp
     from app.routes.musician.tracks.collaborators import collaborators_bp
+    from app.routes.musician.tracks.share import share_bp
+    from app.routes.payments.stripe import payments_bp
+    from app.routes.payments.webhooks import webhook_bp
+    from app.routes.user.library import library_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)
@@ -69,6 +73,10 @@ def create_app(config_name='default'):
     app.register_blueprint(track_approval_bp)
     app.register_blueprint(track_management_bp)
     app.register_blueprint(collaborators_bp)
+    app.register_blueprint(share_bp)
+    app.register_blueprint(payments_bp)
+    app.register_blueprint(webhook_bp)
+    app.register_blueprint(library_bp)
         
     @app.route('/')
     def index():
