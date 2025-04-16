@@ -14,17 +14,19 @@ payments_bp = Blueprint('payments', __name__, url_prefix='/api/payments')
 # Initialize Stripe with your API key
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
-@payments_bp.route('/create-payment-intent', methods=['POST'])
+@payments_bp.route('/create-checkout-session', methods=['POST'])
 @jwt_required()
 @handle_errors
-def create_payment_intent():
-    """Create a payment intent for purchasing a track"""
+def create_checkout_session():
+    """Create a checkout session for purchasing a track"""
     data = request.get_json()
     
     # Validate input
     if not data or 'track_id' not in data:
         return jsonify({'message': 'Track ID is required'}), HTTPStatus.BAD_REQUEST
     
+    if not data or 'quantity' not in data:
+        data['quantity'] = 1
     # Get current user
     current_user = User.query.get(get_jwt_identity())
     if not current_user:
@@ -47,27 +49,41 @@ def create_payment_intent():
         return jsonify({'message': 'Invalid track price'}), HTTPStatus.BAD_REQUEST
     
     try:
-        # Create a PaymentIntent with the order amount and currency
-        payment_intent = stripe.PaymentIntent.create(
-            amount=amount,
-            currency='usd',
+        # Create a Checkout Session
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': track.title,
+                    },
+                    'unit_amount': amount,
+                },
+                'quantity': data['quantity'],
+            }],
+            mode='payment',
+            success_url=f'{os.environ.get("FRONTEND_URL") or "http://localhost:3000"}/music/purchase/success?track_id={track_id}',
+            cancel_url=f'{os.environ.get("FRONTEND_URL") or "http://localhost:3000"}/music/purchase?id={track_id}&canceled=true',
             metadata={
                 'user_id': str(current_user.id),
                 'track_id': str(track_id),
-                'track_title': track.title
-            }
+                'track_title': track.title,
+            },
+            payment_intent_data={
+                'metadata': {
+                    'user_id': str(current_user.id),
+                    'track_id': str(track_id),
+                    'track_title': track.title,
+                },
+            },
         )
         
         return jsonify({
-            'clientSecret': payment_intent.client_secret,
-            'amount': amount,
-            'track': {
-                'id': str(track.id),
-                'title': track.title,
-                'artist': current_user.username,
-                'price': float(track.starting_price)
-            }
+            'sessionId': checkout_session.id,
+            'url': checkout_session.url
         })
     
     except Exception as e:
-        return jsonify({'message': f'Error creating payment: {str(e)}'}), HTTPStatus.INTERNAL_SERVER_ERROR 
+        return jsonify({'message': f'Error creating checkout session: {str(e)}'}), HTTPStatus.INTERNAL_SERVER_ERROR
+
