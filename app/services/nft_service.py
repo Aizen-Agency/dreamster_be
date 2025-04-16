@@ -5,6 +5,7 @@ from web3 import Web3
 from eth_account import Account
 from app.models.track import Track
 from app.models.user import User
+from app.services.s3_service import S3Service
 
 # Connect to blockchain network (example using Infura for Ethereum)
 INFURA_URL = os.environ.get('INFURA_URL', 'https://polygon-mumbai.infura.io/v3/YOUR_INFURA_KEY')
@@ -23,6 +24,9 @@ contract = web3.eth.contract(address=CONTRACT_ADDRESS, abi=CONTRACT_ABI)
 # Private key for minting (should be securely stored, e.g., in AWS KMS)
 MINTER_PRIVATE_KEY = os.environ.get('MINTER_PRIVATE_KEY')
 minter_account = Account.from_key(MINTER_PRIVATE_KEY)
+
+# Initialize the S3Service
+s3_service = S3Service(bucket_name=os.environ.get('AWS_S3_BUCKET', 'dreamster-tracks'))
 
 def mint_nft(user_id, track_id):
     """Mint an NFT for a purchased track"""
@@ -43,7 +47,7 @@ def mint_nft(user_id, track_id):
         metadata = {
             "name": track.title,
             "description": track.description or f"NFT for {track.title}",
-            "image": track.s3_url.replace("audio", "artwork"),  # Assuming artwork URL follows a pattern
+            "image": s3_service.get_file_url(track.id, is_artwork=True),
             "attributes": [
                 {"trait_type": "Artist", "value": track.artist.username},
                 {"trait_type": "Genre", "value": track.genre.name if track.genre else "Unknown"},

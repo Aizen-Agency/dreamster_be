@@ -7,8 +7,13 @@ from http import HTTPStatus
 from app.routes.user.user_utils import handle_errors
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
+from app.services.s3_service import S3Service
+import os
 
 likes_bp = Blueprint('likes', __name__, url_prefix='/api/tracks')
+
+# Initialize the service
+s3_service = S3Service(bucket_name=os.environ.get('AWS_S3_BUCKET', 'dreamster-tracks'))
 
 @likes_bp.route('/<uuid:track_id>/like', methods=['POST'])
 @jwt_required()
@@ -125,11 +130,7 @@ def get_liked_tracks():
         artist = User.query.get(track.artist_id)
         
         # Generate artwork URL safely
-        artwork_url = None
-        if track.s3_url:
-            base_url_parts = track.s3_url.split('/audio')
-            if len(base_url_parts) > 0:
-                artwork_url = f"{base_url_parts[0]}/artwork.jpg"
+        artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
         
         tracks_data.append({
             'id': str(track.id),

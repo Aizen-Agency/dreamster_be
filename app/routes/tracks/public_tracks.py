@@ -7,8 +7,13 @@ from app.routes.user.user_utils import handle_errors
 from sqlalchemy import desc
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request, jwt_required
 import uuid
+from app.services.s3_service import S3Service
+import os
 
 public_tracks_bp = Blueprint('public_tracks', __name__, url_prefix='/api/tracks')
+
+# Initialize the service
+s3_service = S3Service(bucket_name=os.environ.get('AWS_S3_BUCKET', 'dreamster-tracks'))
 
 @public_tracks_bp.route('/', methods=['GET'])
 @handle_errors
@@ -67,12 +72,7 @@ def get_tracks():
         artist = User.query.get(track.artist_id)
         
         # Generate artwork URL safely
-        artwork_url = None
-        if track.s3_url:
-            # Extract the base URL from the audio URL and construct the artwork URL
-            base_url_parts = track.s3_url.split('/audio')
-            if len(base_url_parts) > 0:
-                artwork_url = f"{base_url_parts[0]}/artwork.jpg"
+        artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
         
         tracks_data.append({
             'id': str(track.id),
@@ -139,11 +139,7 @@ def get_track_details(track_id):
     db.session.commit()
     
     # Generate artwork URL safely
-    artwork_url = None
-    if track.s3_url:
-        base_url_parts = track.s3_url.split('/audio')
-        if len(base_url_parts) > 0:
-            artwork_url = f"{base_url_parts[0]}/artwork.jpg"
+    artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
     
     # Check if the current user has liked this track
     user_liked = False
@@ -227,11 +223,7 @@ def get_artist_tracks(artist_id):
     tracks_data = []
     for track in tracks_pagination.items:
         # Generate artwork URL safely
-        artwork_url = None
-        if track.s3_url:
-            base_url_parts = track.s3_url.split('/audio')
-            if len(base_url_parts) > 0:
-                artwork_url = f"{base_url_parts[0]}/artwork.jpg"
+        artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
         
         tracks_data.append({
             'id': str(track.id),

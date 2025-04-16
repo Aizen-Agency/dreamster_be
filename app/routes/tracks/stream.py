@@ -33,10 +33,13 @@ def stream_track(track_id):
     track.stream_count += 1
     db.session.commit()
     
+    # Extract the file extension from the S3 URL
+    file_extension = os.path.splitext(track.s3_url)[1] if track.s3_url else '.mp3'
+    file_key = f"{track_id}/audio{file_extension}"
+    
     # Extract the bucket name and key from the S3 URL
     s3_url_parts = track.s3_url.split('/')
     bucket_name = s3_url_parts[2].split('.')[0]
-    file_key = f"{track_id}/audio.mp3"  # Assuming mp3 format
     
     # Generate a pre-signed URL with a short expiration time (5 minutes)
     s3_client = boto3.client(

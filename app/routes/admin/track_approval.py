@@ -7,8 +7,13 @@ from app.routes.user.user_utils import handle_errors
 from http import HTTPStatus
 from sqlalchemy import desc
 from datetime import datetime
+from app.services.s3_service import S3Service
+import os
 
 track_approval_bp = Blueprint('track_approval', __name__, url_prefix='/api/admin/tracks')
+
+# Initialize the service
+s3_service = S3Service(bucket_name=os.environ.get('AWS_S3_BUCKET', 'dreamster-tracks'))
 
 @track_approval_bp.route('/pending', methods=['GET'])
 @admin_required
@@ -33,11 +38,7 @@ def get_pending_tracks(current_user):
         artist = User.query.get(track.artist_id)
         
         # Generate artwork URL safely
-        artwork_url = None
-        if track.s3_url:
-            base_url_parts = track.s3_url.split('/audio')
-            if len(base_url_parts) > 0:
-                artwork_url = f"{base_url_parts[0]}/artwork.jpg"
+        artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
         
         tracks_data.append({
             'id': str(track.id),

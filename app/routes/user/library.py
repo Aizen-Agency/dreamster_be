@@ -5,8 +5,13 @@ from app.extensions.extension import db
 from app.models.user import User
 from app.models.user_owned_track import UserOwnedTrack
 from app.routes.user.user_utils import handle_errors
+from app.services.s3_service import S3Service
+import os
 
 library_bp = Blueprint('library', __name__, url_prefix='/api/user/library')
+
+# Initialize the service
+s3_service = S3Service(bucket_name=os.environ.get('AWS_S3_BUCKET', 'dreamster-tracks'))
 
 @library_bp.route('/', methods=['GET'])
 @jwt_required()
@@ -25,10 +30,7 @@ def get_user_library():
     for owned in owned_tracks:
         track = owned.track
         artist = User.query.filter_by(id=track.artist_id).first()
-        if track.s3_url:
-            artwork_url = f"{track.s3_url.split('/audio')[0]}/artwork.jpg"
-        else:
-            artwork_url = ''
+        artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
 
         library.append({
             'id': str(track.id),
@@ -98,13 +100,14 @@ def get_owned_tracks():
     owned_tracks_list = []
     for owned in owned_tracks:
         track = owned.track
+        artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
         owned_tracks_list.append({
             'id': str(track.id),
             'title': track.title,
             'artist': track.artist.username,
             'genre': track.genre.name if track.genre else None,
             's3_url': track.s3_url,
-            'artwork_url': track.s3_url.replace("audio", "artwork") if track.s3_url else None,
+            'artwork_url': artwork_url,
             'purchase_date': owned.purchase_date.isoformat(),
             'exclusive': track.exclusive
         })

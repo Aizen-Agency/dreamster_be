@@ -7,8 +7,12 @@ from app.routes.user.user_utils import handle_errors
 import boto3
 import os
 from botocore.exceptions import ClientError
+from app.services.s3_service import S3Service
 
 share_bp = Blueprint('share', __name__, url_prefix='/api/tracks/share')
+
+# Initialize the service
+s3_service = S3Service(bucket_name=os.environ.get('AWS_S3_BUCKET', 'dreamster-tracks'))
 
 @share_bp.route('/<uuid:track_id>', methods=['GET'])
 @handle_errors
@@ -28,11 +32,7 @@ def get_shared_track(track_id):
     db.session.commit()
     
     # Generate artwork URL safely
-    artwork_url = None
-    if track.s3_url:
-        base_url_parts = track.s3_url.split('/audio')
-        if len(base_url_parts) > 0:
-            artwork_url = f"{base_url_parts[0]}/artwork.jpg"
+    artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
     
     return jsonify({
         'id': str(track.id),
