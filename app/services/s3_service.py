@@ -215,4 +215,43 @@ class S3Service:
                 except ClientError:
                     pass
         except ClientError as e:
-            raise Exception(f"Failed to delete perk file: {str(e)}") 
+            raise Exception(f"Failed to delete perk file: {str(e)}")
+
+    def generate_presigned_url(self, track_id, perk_id, is_audio=False, expiration=300):
+        """Generate a pre-signed URL for downloading a perk file"""
+        try:
+            # Get the perk to determine the file path
+            from app.models.trackperk import TrackPerk, Category
+            perk = TrackPerk.query.get(perk_id)
+            
+            if not perk:
+                raise Exception("Perk not found")
+            
+            # Determine the file path based on category and file type
+            is_stem_category = perk.category == Category.stem
+            
+            # Extract file extension from s3_url
+            file_extension = os.path.splitext(perk.s3_url)[1] if perk.s3_url else ''
+            if not file_extension:
+                # Try to guess based on perk type
+                if is_audio or perk.perk_type.name == 'audio':
+                    file_extension = '.mp3'
+                else:
+                    file_extension = '.pdf'  # Default assumption
+            
+            if is_stem_category:
+                file_key = f"{track_id}/stems/{perk_id}{file_extension}"
+            else:
+                file_key = f"{track_id}/perks/{perk_id}{file_extension}"
+            
+            # Generate a pre-signed URL
+            presigned_url = self.s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': self.bucket_name, 'Key': file_key},
+                ExpiresIn=expiration
+            )
+            
+            return presigned_url
+        except Exception as e:
+            print(f"Error generating presigned URL: {str(e)}")
+            raise Exception(f"Failed to generate download URL: {str(e)}") 
