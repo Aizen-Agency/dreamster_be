@@ -24,13 +24,19 @@ def get_user_library():
     library = []
     for owned in owned_tracks:
         track = owned.track
+        artist = User.query.filter_by(id=track.artist_id).first()
+        if track.s3_url:
+            artwork_url = f"{track.s3_url.split('/audio')[0]}/artwork.jpg"
+        else:
+            artwork_url = ''
+
         library.append({
             'id': str(track.id),
             'title': track.title,
-            'artist': track.artist.username,
+            'artist': artist.username if artist else '',
             'genre': track.genre.name if track.genre else None,
             's3_url': track.s3_url,
-            'artwork_url': track.s3_url.replace("audio", "artwork") if track.s3_url else None,
+            'artwork_url': artwork_url,
             'purchase_date': owned.purchase_date.isoformat(),
             'exclusive': track.exclusive
         })
@@ -74,6 +80,38 @@ def get_user_transactions():
     return jsonify({
         'transactions': transactions_list,
         'count': len(transactions_list)
+    }), HTTPStatus.OK
+
+@library_bp.route('/owned-tracks', methods=['GET'])
+@jwt_required()
+@handle_errors
+def get_owned_tracks():
+    """Get all tracks owned by the current user"""
+    current_user = User.query.get(get_jwt_identity())
+    if not current_user:
+        return jsonify({'message': 'User not found'}), HTTPStatus.NOT_FOUND
+    
+    # Query user's owned tracks with related data
+    owned_tracks = UserOwnedTrack.query.filter_by(user_id=current_user.id).all()
+    
+    # Format response
+    owned_tracks_list = []
+    for owned in owned_tracks:
+        track = owned.track
+        owned_tracks_list.append({
+            'id': str(track.id),
+            'title': track.title,
+            'artist': track.artist.username,
+            'genre': track.genre.name if track.genre else None,
+            's3_url': track.s3_url,
+            'artwork_url': track.s3_url.replace("audio", "artwork") if track.s3_url else None,
+            'purchase_date': owned.purchase_date.isoformat(),
+            'exclusive': track.exclusive
+        })
+
+    return jsonify({
+        'owned_tracks': owned_tracks_list,
+        'count': len(owned_tracks_list)
     }), HTTPStatus.OK
 
 @library_bp.route('/owns/<uuid:track_id>', methods=['GET'])
