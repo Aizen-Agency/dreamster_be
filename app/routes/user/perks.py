@@ -1,0 +1,300 @@
+from flask import Blueprint, jsonify, request, send_file
+from http import HTTPStatus
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.extensions.extension import db
+from app.models.user import User
+from app.models.user_owned_track import UserOwnedTrack
+from app.models.track import Track
+from app.models.trackperk import TrackPerk, Category, PerkType
+from app.routes.user.user_utils import handle_errors
+from app.services.s3_service import S3Service
+import os
+import requests
+from io import BytesIO
+import uuid
+
+perks_bp = Blueprint('perks', __name__, url_prefix='/api/user/perks')
+
+# Initialize the service
+s3_service = S3Service(bucket_name=os.environ.get('AWS_S3_BUCKET', 'dreamster-tracks'))
+
+@perks_bp.route('/', methods=['GET'])
+@jwt_required()
+@handle_errors
+def get_all_perks():
+    """Get all perks for tracks owned by the current user"""
+    current_user = User.query.get(get_jwt_identity())
+    if not current_user:
+        return jsonify({'message': 'User not found'}), HTTPStatus.NOT_FOUND
+    
+    # Get all tracks owned by the user
+    owned_tracks = UserOwnedTrack.query.filter_by(user_id=current_user.id).all()
+    owned_track_ids = [owned.track_id for owned in owned_tracks]
+    
+    if not owned_track_ids:
+        return jsonify({
+            'perks': [],
+            'count': 0
+        }), HTTPStatus.OK
+    
+    # Get all artists whose tracks the user owns
+    owned_artists = db.session.query(Track.artist_id).filter(
+        Track.id.in_(owned_track_ids)
+    ).distinct().all()
+    owned_artist_ids = [artist[0] for artist in owned_artists]
+    
+    # Get all perks for the owned tracks
+    perks_data = []
+    
+    # 1. Direct perks from owned tracks
+    direct_perks = TrackPerk.query.filter(
+        TrackPerk.track_id.in_(owned_track_ids),
+        TrackPerk.active == True
+    ).all()
+    
+    # 2. Exclusive perks from the same artists
+    if owned_artist_ids:
+        # Get all tracks from these artists
+        artist_tracks = Track.query.filter(
+            Track.artist_id.in_(owned_artist_ids),
+            Track.approved == True
+        ).all()
+        
+        artist_track_ids = [track.id for track in artist_tracks]
+        
+        # Get exclusive perks from these artists' tracks
+        exclusive_perks = TrackPerk.query.filter(
+            TrackPerk.track_id.in_(artist_track_ids),
+            TrackPerk.category == Category.exclusive,
+            TrackPerk.active == True
+        ).all()
+        
+        # Add exclusive perks to the list
+        direct_perks.extend(exclusive_perks)
+    
+    # Format perks data
+    for perk in direct_perks:
+        track = Track.query.get(perk.track_id)
+        
+        # Skip if track doesn't exist or isn't approved
+        if not track or not track.approved:
+            continue
+            
+        # Check if this is a direct perk or an exclusive perk
+        is_direct = perk.track_id in owned_track_ids
+        
+        perks_data.append({
+            'id': str(perk.id),
+            'title': perk.title,
+            'description': perk.description,
+            'category': perk.category.name,
+            'perk_type': perk.perk_type.name,
+            's3_url': perk.s3_url,
+            'track_id': str(perk.track_id),
+            'track_title': track.title,
+            'artist_id': str(track.artist_id),
+            'artist_name': track.artist.username,
+            'is_direct': is_direct,
+            'created_at': perk.created_at.isoformat()
+        })
+    
+    return jsonify({
+        'perks': perks_data,
+        'count': len(perks_data)
+    }), HTTPStatus.OK
+
+@perks_bp.route('/category/<category>', methods=['GET'])
+@jwt_required()
+@handle_errors
+def get_perks_by_category(category):
+    """Get perks by category for tracks owned by the current user"""
+    try:
+        category_enum = Category[category]
+    except KeyError:
+        return jsonify({
+            'message': f'Invalid category: {category}. Valid options are: {[c.name for c in Category]}'
+        }), HTTPStatus.BAD_REQUEST
+    
+    current_user = User.query.get(get_jwt_identity())
+    if not current_user:
+        return jsonify({'message': 'User not found'}), HTTPStatus.NOT_FOUND
+    
+    # Get all tracks owned by the user
+    owned_tracks = UserOwnedTrack.query.filter_by(user_id=current_user.id).all()
+    owned_track_ids = [owned.track_id for owned in owned_tracks]
+    
+    if not owned_track_ids:
+        return jsonify({
+            'perks': [],
+            'count': 0
+        }), HTTPStatus.OK
+    
+    perks_data = []
+    
+    if category_enum == Category.exclusive:
+        # For exclusive perks, we need to get all artists whose tracks the user owns
+        owned_artists = db.session.query(Track.artist_id).filter(
+            Track.id.in_(owned_track_ids)
+        ).distinct().all()
+        owned_artist_ids = [artist[0] for artist in owned_artists]
+        
+        if owned_artist_ids:
+            # Get all tracks from these artists
+            artist_tracks = Track.query.filter(
+                Track.artist_id.in_(owned_artist_ids),
+                Track.approved == True
+            ).all()
+            
+            artist_track_ids = [track.id for track in artist_tracks]
+            
+            # Get exclusive perks from these artists' tracks
+            perks = TrackPerk.query.filter(
+                TrackPerk.track_id.in_(artist_track_ids),
+                TrackPerk.category == Category.exclusive,
+                TrackPerk.active == True
+            ).all()
+    else:
+        # For other categories, just get perks from owned tracks
+        perks = TrackPerk.query.filter(
+            TrackPerk.track_id.in_(owned_track_ids),
+            TrackPerk.category == category_enum,
+            TrackPerk.active == True
+        ).all()
+    
+    # Format perks data
+    for perk in perks:
+        track = Track.query.get(perk.track_id)
+        
+        # Skip if track doesn't exist or isn't approved
+        if not track or not track.approved:
+            continue
+            
+        # Check if this is a direct perk or an exclusive perk
+        is_direct = perk.track_id in owned_track_ids
+        
+        perks_data.append({
+            'id': str(perk.id),
+            'title': perk.title,
+            'description': perk.description,
+            'category': perk.category.name,
+            'perk_type': perk.perk_type.name,
+            's3_url': perk.s3_url,
+            'track_id': str(perk.track_id),
+            'track_title': track.title,
+            'artist_id': str(track.artist_id),
+            'artist_name': track.artist.username,
+            'is_direct': is_direct,
+            'created_at': perk.created_at.isoformat()
+        })
+    
+    return jsonify({
+        'perks': perks_data,
+        'count': len(perks_data)
+    }), HTTPStatus.OK
+
+@perks_bp.route('/track/<uuid:track_id>', methods=['GET'])
+@jwt_required()
+@handle_errors
+def get_perks_for_track(track_id):
+    """Get all perks for a specific track owned by the current user"""
+    current_user = User.query.get(get_jwt_identity())
+    if not current_user:
+        return jsonify({'message': 'User not found'}), HTTPStatus.NOT_FOUND
+    
+    # Check if the user owns this track
+    ownership = UserOwnedTrack.query.filter_by(
+        user_id=current_user.id,
+        track_id=track_id
+    ).first()
+    
+    if not ownership:
+        return jsonify({'message': 'You do not own this track'}), HTTPStatus.FORBIDDEN
+    
+    # Get all perks for this track
+    perks = TrackPerk.query.filter_by(
+        track_id=track_id,
+        active=True
+    ).all()
+    
+    # Format perks data
+    perks_data = []
+    for perk in perks:
+        track = Track.query.get(perk.track_id)
+        
+        perks_data.append({
+            'id': str(perk.id),
+            'title': perk.title,
+            'description': perk.description,
+            'category': perk.category.name,
+            'perk_type': perk.perk_type.name,
+            's3_url': perk.s3_url,
+            'track_id': str(perk.track_id),
+            'track_title': track.title,
+            'artist_id': str(track.artist_id),
+            'artist_name': track.artist.username,
+            'created_at': perk.created_at.isoformat()
+        })
+    
+    return jsonify({
+        'perks': perks_data,
+        'count': len(perks_data)
+    }), HTTPStatus.OK
+
+@perks_bp.route('/download/<uuid:perk_id>', methods=['GET'])
+@jwt_required()
+@handle_errors
+def download_perk(perk_id):
+    """Download a perk file"""
+    current_user = User.query.get(get_jwt_identity())
+    if not current_user:
+        return jsonify({'message': 'User not found'}), HTTPStatus.NOT_FOUND
+    
+    # Get the perk
+    perk = TrackPerk.query.get_or_404(perk_id)
+    
+    # Check if the user owns the track associated with this perk
+    track_id = perk.track_id
+    
+    # For exclusive perks, check if the user owns any track from this artist
+    if perk.category == Category.exclusive:
+        track = Track.query.get(track_id)
+        artist_id = track.artist_id
+        
+        # Check if user owns any track from this artist
+        ownership = UserOwnedTrack.query.join(Track).filter(
+            UserOwnedTrack.user_id == current_user.id,
+            Track.artist_id == artist_id
+        ).first()
+    else:
+        # For regular perks, check direct ownership
+        ownership = UserOwnedTrack.query.filter_by(
+            user_id=current_user.id,
+            track_id=track_id
+        ).first()
+    
+    if not ownership:
+        return jsonify({'message': 'You do not have access to this perk'}), HTTPStatus.FORBIDDEN
+    
+    # Check if perk has a URL
+    if not perk.s3_url:
+        return jsonify({'message': 'No file available for this perk'}), HTTPStatus.NOT_FOUND
+    
+    # For text or URL perks, just return the content
+    if perk.perk_type == PerkType.text or perk.perk_type == PerkType.url:
+        return jsonify({
+            'content': perk.s3_url,
+            'perk_type': perk.perk_type.name
+        }), HTTPStatus.OK
+    
+    # For file perks, generate a pre-signed URL for download
+    try:
+        # Generate a pre-signed URL with a 5-minute expiration
+        download_url = s3_service.generate_presigned_url(perk.track_id, perk.id, perk.perk_type == PerkType.audio)
+        
+        return jsonify({
+            'download_url': download_url,
+            'perk_type': perk.perk_type.name,
+            'expires_in': 300  # 5 minutes in seconds
+        }), HTTPStatus.OK
+    except Exception as e:
+        return jsonify({'message': f'Error generating download URL: {str(e)}'}), HTTPStatus.INTERNAL_SERVER_ERROR 

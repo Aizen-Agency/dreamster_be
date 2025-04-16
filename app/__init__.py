@@ -60,6 +60,7 @@ def create_app(config_name='default'):
     from app.routes.payments.stripe import payments_bp
     from app.routes.payments.webhooks import webhook_bp
     from app.routes.user.library import library_bp
+    from app.routes.user.perks import perks_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)
@@ -77,6 +78,7 @@ def create_app(config_name='default'):
     app.register_blueprint(payments_bp)
     app.register_blueprint(webhook_bp)
     app.register_blueprint(library_bp)
+    app.register_blueprint(perks_bp)
         
     @app.route('/')
     def index():
