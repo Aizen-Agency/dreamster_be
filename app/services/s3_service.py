@@ -49,9 +49,39 @@ class S3Service:
 
     def delete_file(self, track_id, is_artwork):
         try:
-            extension = '.jpg' if is_artwork else '.mp3'
-            file_key = f"{track_id}/{'artwork' if is_artwork else 'audio'}{extension}"
-            self.s3.delete_object(Bucket=self.bucket_name, Key=file_key)
+            if not is_artwork:
+                # For audio files, we can keep the .mp3 assumption
+                file_key = f"{track_id}/audio.mp3"
+                self.s3.delete_object(Bucket=self.bucket_name, Key=file_key)
+            else:
+                # For artwork, try common image extensions
+                extensions = ['.jpg', '.jpeg', '.png', '.gif']
+                deleted = False
+                
+                # Try to list objects first to find the exact file
+                try:
+                    response = self.s3.list_objects_v2(
+                        Bucket=self.bucket_name,
+                        Prefix=f"{track_id}/artwork"
+                    )
+                    
+                    if 'Contents' in response:
+                        for obj in response.get('Contents', []):
+                            if obj['Key'].startswith(f"{track_id}/artwork"):
+                                self.s3.delete_object(Bucket=self.bucket_name, Key=obj['Key'])
+                                deleted = True
+                                break
+                except Exception:
+                    pass
+                
+                # If listing didn't work, try common extensions
+                if not deleted:
+                    for ext in extensions:
+                        try:
+                            file_key = f"{track_id}/artwork{ext}"
+                            self.s3.delete_object(Bucket=self.bucket_name, Key=file_key)
+                        except ClientError:
+                            continue
         except ClientError as e:
             raise Exception(f"Failed to delete file: {str(e)}")
 
