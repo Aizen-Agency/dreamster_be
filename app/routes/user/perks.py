@@ -12,6 +12,7 @@ import os
 import requests
 from io import BytesIO
 import uuid
+import boto3
 
 perks_bp = Blueprint('perks', __name__, url_prefix='/api/user/perks')
 
@@ -166,6 +167,11 @@ def get_perks_by_category(category):
     # Format perks data
     for perk in perks:
         track = Track.query.get(perk.track_id)
+        if s3_service:
+            artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
+        else:
+            artwork_url = None
+
         artist = User.query.get(track.artist_id)
         
         # Skip if track doesn't exist or isn't approved
@@ -185,6 +191,7 @@ def get_perks_by_category(category):
             'category': perk.category.name,
             'perk_type': perk.perk_type.name,
             's3_url': perk.s3_url,
+            'artwork_url': artwork_url if artwork_url else None,
             'track_id': str(perk.track_id),
             'track_title': track.title,
             'artist_id': str(track.artist_id),
@@ -226,6 +233,10 @@ def get_perks_for_track(track_id):
     perks_data = []
     for perk in perks:
         track = Track.query.get(perk.track_id)
+        if s3_service:
+            artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
+        else:
+            artwork_url = None
         artist = User.query.get(track.artist_id)
         
         perks_data.append({
@@ -235,6 +246,7 @@ def get_perks_for_track(track_id):
             'category': perk.category.name,
             'perk_type': perk.perk_type.name,
             's3_url': perk.s3_url,
+            'artwork_url': artwork_url if artwork_url else None,
             'track_id': str(perk.track_id),
             'track_title': track.title,
             'artist_id': str(track.artist_id),
@@ -282,12 +294,19 @@ def download_perk(perk_id):
     if not ownership:
         return jsonify({'message': 'You do not have access to this perk'}), HTTPStatus.FORBIDDEN
     
-    # Check if perk has a URL
-    if not perk.s3_url:
+    # For exclusive audio perks, we might need to get the track's s3_url
+    if perk.category == Category.exclusive:
+        track = Track.query.get(track_id)
+        if track and track.s3_url:
+            pass
+        else:
+            return jsonify({'message': 'No file available for this perk'}), HTTPStatus.NOT_FOUND
+    # For other perk types, check if perk has a URL
+    elif not perk.s3_url:
         return jsonify({'message': 'No file available for this perk'}), HTTPStatus.NOT_FOUND
     
     # For text or URL perks, just return the content
-    if perk.perk_type == PerkType.text or perk.perk_type == PerkType.url:
+    if perk.category != Category.exclusive and (perk.perk_type == PerkType.text or perk.perk_type == PerkType.url):
         return jsonify({
             'content': perk.s3_url,
             'perk_type': perk.perk_type.name
@@ -295,11 +314,48 @@ def download_perk(perk_id):
     
     # For file perks, generate a pre-signed URL for download
     try:
-        # Generate a pre-signed URL with a 5-minute expiration
-        download_url = s3_service.generate_presigned_url(perk.track_id, perk.id, perk.perk_type == PerkType.audio)
+        file_extension = '.mp3'  # Default extension
+        
+        # Special handling for exclusive audio perks
+        if perk.category == Category.exclusive:
+            # Get the track to access its audio file
+            track = Track.query.get(track_id)
+            if track and track.s3_url:
+                # Extract the file extension from the S3 URL
+                file_extension = os.path.splitext(track.s3_url)[1] if track.s3_url else '.mp3'
+                file_key = f"{track_id}/audio{file_extension}"
+                
+                # Extract the bucket name from the S3 URL
+                s3_url_parts = track.s3_url.split('/')
+                bucket_name = s3_url_parts[2].split('.')[0]
+                
+                # Generate a pre-signed URL for the track's audio file
+                s3_client = boto3.client(
+                    's3',
+                    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                    region_name=os.environ.get('AWS_REGION', 'eu-north-1')
+                )
+                
+                download_url = s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': bucket_name, 'Key': file_key},
+                    ExpiresIn=300  # 5 minutes
+                )
+            else:
+                return jsonify({'message': 'Track audio file not found'}), HTTPStatus.NOT_FOUND
+        else:
+            # For regular perks, use the existing method
+            download_url = s3_service.generate_presigned_url(perk.track_id, perk.id, perk.perk_type)
+            
+            # Extract file extension for regular perks
+            if perk.s3_url:
+                file_extension = os.path.splitext(perk.s3_url)[1] or file_extension
         
         return jsonify({
             'download_url': download_url,
+            'filename': perk.title,
+            'file_extension': file_extension,
             'perk_type': perk.perk_type.name,
             'expires_in': 300  # 5 minutes in seconds
         }), HTTPStatus.OK

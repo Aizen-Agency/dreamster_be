@@ -242,7 +242,7 @@ class S3Service:
             if is_stem_category:
                 file_key = f"{track_id}/stems/{perk_id}{file_extension}"
             else:
-                file_key = f"{track_id}/perks/{perk_id}{file_extension}"
+                file_key = f"{track_id}/perks/{perk_id}/file1{file_extension}"
             
             # Generate a pre-signed URL
             presigned_url = self.s3.generate_presigned_url(
