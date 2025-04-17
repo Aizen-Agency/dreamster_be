@@ -24,14 +24,15 @@ s3_service = S3Service(bucket_name=os.environ.get('AWS_S3_BUCKET', 'dreamster-tr
 def get_all_perks():
     """Get all perks for tracks owned by the current user"""
     current_user = User.query.get(get_jwt_identity())
+    print(current_user.id)
     if not current_user:
         return jsonify({'message': 'User not found'}), HTTPStatus.NOT_FOUND
     
     # Get all tracks owned by the user
     owned_tracks = UserOwnedTrack.query.filter_by(user_id=current_user.id).all()
     owned_track_ids = [owned.track_id for owned in owned_tracks]
-    
-    if not owned_track_ids:
+
+    if not len(owned_track_ids) > 0:
         return jsonify({
             'perks': [],
             'count': 0
@@ -75,6 +76,7 @@ def get_all_perks():
     # Format perks data
     for perk in direct_perks:
         track = Track.query.get(perk.track_id)
+        artist = User.query.get(track.artist_id)
         
         # Skip if track doesn't exist or isn't approved
         if not track or not track.approved:
@@ -93,7 +95,7 @@ def get_all_perks():
             'track_id': str(perk.track_id),
             'track_title': track.title,
             'artist_id': str(track.artist_id),
-            'artist_name': track.artist.username,
+            'artist_name': artist.username,
             'is_direct': is_direct,
             'created_at': perk.created_at.isoformat()
         })
@@ -122,8 +124,8 @@ def get_perks_by_category(category):
     # Get all tracks owned by the user
     owned_tracks = UserOwnedTrack.query.filter_by(user_id=current_user.id).all()
     owned_track_ids = [owned.track_id for owned in owned_tracks]
-    
-    if not owned_track_ids:
+    print(owned_track_ids)
+    if not len(owned_track_ids) > 0:
         return jsonify({
             'perks': [],
             'count': 0
@@ -160,15 +162,19 @@ def get_perks_by_category(category):
             TrackPerk.category == category_enum,
             TrackPerk.active == True
         ).all()
-    
+    print("perks before", perks)
     # Format perks data
     for perk in perks:
         track = Track.query.get(perk.track_id)
+        artist = User.query.get(track.artist_id)
         
         # Skip if track doesn't exist or isn't approved
         if not track or not track.approved:
-            continue
-            
+            return jsonify({
+                'message': 'Track not found or not approved'
+            }), HTTPStatus.NOT_FOUND
+
+        print("perk", perk.track_id)
         # Check if this is a direct perk or an exclusive perk
         is_direct = perk.track_id in owned_track_ids
         
@@ -182,7 +188,7 @@ def get_perks_by_category(category):
             'track_id': str(perk.track_id),
             'track_title': track.title,
             'artist_id': str(track.artist_id),
-            'artist_name': track.artist.username,
+            'artist_name': artist.username,
             'is_direct': is_direct,
             'created_at': perk.created_at.isoformat()
         })
@@ -220,6 +226,7 @@ def get_perks_for_track(track_id):
     perks_data = []
     for perk in perks:
         track = Track.query.get(perk.track_id)
+        artist = User.query.get(track.artist_id)
         
         perks_data.append({
             'id': str(perk.id),
@@ -231,7 +238,7 @@ def get_perks_for_track(track_id):
             'track_id': str(perk.track_id),
             'track_title': track.title,
             'artist_id': str(track.artist_id),
-            'artist_name': track.artist.username,
+            'artist_name': artist.username,
             'created_at': perk.created_at.isoformat()
         })
     
