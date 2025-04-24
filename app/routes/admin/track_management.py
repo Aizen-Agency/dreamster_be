@@ -223,4 +223,59 @@ def get_rejected_tracks(current_user):
         'total': tracks_pagination.total,
         'pages': tracks_pagination.pages,
         'current_page': page
+    }), HTTPStatus.OK
+
+@track_management_bp.route('/deleted', methods=['GET'])
+@admin_required
+@handle_errors
+def get_deleted_tracks(current_user):
+    """Get a paginated list of all deleted tracks for admin"""
+    from app.models.deleted_track import DeletedTrack
+    
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    
+    # Query all deleted tracks
+    query = DeletedTrack.query
+    
+    # Sort by deletion date (newest first)
+    query = query.order_by(desc(DeletedTrack.deleted_at))
+    
+    # Execute paginated query
+    tracks_pagination = query.paginate(page=page, per_page=per_page)
+    
+    # Format track data with artist information
+    tracks_data = []
+    for track in tracks_pagination.items:
+        artist = User.query.get(track.artist_id)
+        
+        # Generate artwork URL safely
+        artwork_url = s3_service.get_file_url(track.track_id, is_artwork=True) if track.s3_url else None
+        
+        tracks_data.append({
+            'id': str(track.id),
+            'original_track_id': str(track.track_id),
+            'title': track.title,
+            'description': track.description,
+            'genre': track.genre,
+            'tags': track.tags,
+            'starting_price': float(track.starting_price) if track.starting_price else 0,
+            'duration': track.duration,
+            'stream_count': track.stream_count,
+            'created_at': track.created_at.isoformat(),
+            'deleted_at': track.deleted_at.isoformat(),
+            'artwork_url': artwork_url,
+            'exclusive': track.exclusive,
+            'artist': {
+                'id': str(artist.id) if artist else None,
+                'name': artist.username if artist else "Unknown Artist",
+                'username': artist.username if artist else "Unknown Artist"
+            }
+        })
+    
+    return jsonify({
+        'deleted_tracks': tracks_data,
+        'total': tracks_pagination.total,
+        'pages': tracks_pagination.pages,
+        'current_page': page
     }), HTTPStatus.OK 

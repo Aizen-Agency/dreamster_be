@@ -15,6 +15,7 @@ import mimetypes
 from botocore.exceptions import NoCredentialsError, ClientError
 from app.models.user import User
 from app.models.collaborator import Collaborator
+from app.models.deleted_track import DeletedTrack
 
 tracks_bp = Blueprint('tracks', __name__, url_prefix='/api/musician/tracks')
 s3_service = S3Service(bucket_name='dreamster-tracks')
@@ -294,9 +295,37 @@ def delete_track(current_user, track_id):
     if not track:
         return jsonify({'message': 'Track not found'}), HTTPStatus.NOT_FOUND
 
-    # Delete track from database and S3
-    s3_service.delete_file(track_id, is_artwork=False)
-    s3_service.delete_file(track_id, is_artwork=True)
+    # Get collaborators before deleting the track
+    collaborators = Collaborator.query.filter_by(track_id=track_id).all()
+    
+    # Create a record in deleted_tracks before deleting from tracks table
+    deleted_track = DeletedTrack(
+        track_id=track.id,
+        title=track.title,
+        description=track.description,
+        genre=track.genre.name if track.genre else None,
+        tags=track.tags,
+        starting_price=track.starting_price,
+        created_at=track.created_at,
+        updated_at=track.updated_at,
+        s3_url=track.s3_url,
+        artist_id=track.artist_id,
+        duration=track.duration,
+        stream_count=track.stream_count,
+        download_count=track.download_count,
+        likes=track.likes,
+        comments=track.comments,
+        views=track.views,
+        shares=track.shares,
+        exclusive=track.exclusive,
+        sales_count=track.sales_count
+    )
+    
+    db.session.add(deleted_track)
+    
+    for collaborator in collaborators:
+        db.session.delete(collaborator)
+    
     db.session.delete(track)
     db.session.commit()
 

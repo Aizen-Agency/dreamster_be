@@ -17,7 +17,7 @@ s3_service = S3Service(bucket_name=os.environ.get('AWS_S3_BUCKET', 'dreamster-tr
 @jwt_required()
 @handle_errors
 def get_user_library():
-    """Get all tracks owned by the current user"""
+    """Get all tracks owned by the current user, including deleted tracks"""
     current_user = User.query.get(get_jwt_identity())
     if not current_user:
         return jsonify({'message': 'User not found'}), HTTPStatus.NOT_FOUND
@@ -25,23 +25,51 @@ def get_user_library():
     # Query user's owned tracks with related data
     owned_tracks = UserOwnedTrack.query.filter_by(user_id=current_user.id).all()
     
+    # Import the DeletedTrack model
+    from app.models.deleted_track import DeletedTrack
+    
     # Format response
     library = []
     for owned in owned_tracks:
+        track_id = owned.track_id
+        
         track = owned.track
-        artist = User.query.filter_by(id=track.artist_id).first()
-        artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
-
-        library.append({
-            'id': str(track.id),
-            'title': track.title,
-            'artist': artist.username if artist else '',
-            'genre': track.genre.name if track.genre else None,
-            's3_url': track.s3_url,
-            'artwork_url': artwork_url,
-            'purchase_date': owned.purchase_date.isoformat(),
-            'exclusive': track.exclusive
-        })
+        
+        if track is None:
+            deleted_track = DeletedTrack.query.filter_by(track_id=track_id).first()
+            if deleted_track:
+                artwork_url = s3_service.get_file_url(deleted_track.track_id, is_artwork=True) if deleted_track.s3_url else None
+                
+                artist = User.query.get(deleted_track.artist_id)
+                artist_name = artist.username if artist else "Unknown Artist"
+                
+                library.append({
+                    'id': str(deleted_track.track_id),
+                    'title': deleted_track.title,
+                    'artist': artist_name,
+                    'genre': deleted_track.genre,
+                    's3_url': deleted_track.s3_url,
+                    'artwork_url': artwork_url,
+                    'purchase_date': owned.purchase_date.isoformat(),
+                    'exclusive': deleted_track.exclusive,
+                    'is_deleted': True
+                })
+            continue
+        
+        if track:
+            artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
+            artist = User.query.filter_by(id=track.artist_id).first()
+            library.append({
+                'id': str(track.id),
+                'title': track.title,
+                'artist': artist.username if artist else "Unknown Artist",
+                'genre': track.genre.name if track.genre else None,
+                's3_url': track.s3_url,
+                'artwork_url': artwork_url,
+                'purchase_date': owned.purchase_date.isoformat(),
+                'exclusive': track.exclusive,
+                'is_deleted': False
+            })
     
     return jsonify({
         'library': library,

@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from app.extensions.extension import db, jwt
 from app.models.user import User, UserRole
 from app.config import Config
+from app.services.privy_service import PrivyService
 import datetime
 import os
 from flask_jwt_extended import create_access_token
@@ -48,6 +49,10 @@ def register():
     # Save to database
     db.session.add(user)
     db.session.commit()
+
+    privy_service = PrivyService(os.getenv('PRIVY_APP_ID'), os.getenv('PRIVY_SECRET_KEY'))
+    response = privy_service.create_wallet_address(user.email, user.username, user.username)
+    print(response)
     
     return jsonify({
         'message': 'User registered successfully',
