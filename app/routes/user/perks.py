@@ -125,13 +125,14 @@ def get_perks_by_category(category):
     # Get all tracks owned by the user
     owned_tracks = UserOwnedTrack.query.filter_by(user_id=current_user.id).all()
     owned_track_ids = [owned.track_id for owned in owned_tracks]
-    print(owned_track_ids)
+    
     if not len(owned_track_ids) > 0:
         return jsonify({
             'perks': [],
             'count': 0
         }), HTTPStatus.OK
     
+    # Initialize perks_data list
     perks_data = []
     
     if category_enum == Category.exclusive:
@@ -157,16 +158,20 @@ def get_perks_by_category(category):
                 TrackPerk.active == True
             ).all()
     else:
-        # For other categories, just get perks from owned tracks
+        # For other categories (stems, custom, discord), only get perks from owned tracks
         perks = TrackPerk.query.filter(
             TrackPerk.track_id.in_(owned_track_ids),
             TrackPerk.category == category_enum,
             TrackPerk.active == True
         ).all()
-    print("perks before", perks)
+
     # Format perks data
     for perk in perks:
         track = Track.query.get(perk.track_id)
+        if not track or not track.approved:
+            # Skip if track doesn't exist or isn't approved
+            continue
+            
         if s3_service:
             artwork_url = s3_service.get_file_url(track.id, is_artwork=True) if track.s3_url else None
         else:
@@ -174,13 +179,6 @@ def get_perks_by_category(category):
 
         artist = User.query.get(track.artist_id)
         
-        # Skip if track doesn't exist or isn't approved
-        if not track or not track.approved:
-            return jsonify({
-                'message': 'Track not found or not approved'
-            }), HTTPStatus.NOT_FOUND
-
-        print("perk", perk.track_id)
         # Check if this is a direct perk or an exclusive perk
         is_direct = perk.track_id in owned_track_ids
         

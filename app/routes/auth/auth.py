@@ -51,7 +51,7 @@ def register():
     db.session.commit()
 
     privy_service = PrivyService(os.getenv('PRIVY_APP_ID'), os.getenv('PRIVY_SECRET_KEY'))
-    response = privy_service.create_wallet_address(user.email, user.username, user.username)
+    response = privy_service.create_wallet_address(user.email, user.username, user.username, user.id)
     print(response)
     
     return jsonify({

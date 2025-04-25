@@ -3,6 +3,7 @@ from flask_migrate import Migrate
 import os
 from app.extensions.extension import jwt, db
 from flask_cors import CORS
+from datetime import timedelta
 
 # Initialize migrate with the imported db
 migrate = Migrate()
@@ -15,6 +16,7 @@ def create_app(config_name='default'):
     CORS(app)
 
     app.config.from_object(config_by_name[config_name])
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=3)
     
     # Initialize extensions with app
     db.init_app(app)

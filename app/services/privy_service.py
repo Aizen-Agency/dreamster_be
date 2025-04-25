@@ -1,6 +1,7 @@
 import requests
 import os
 import base64
+from uuid import UUID
 
 class PrivyService:
     def __init__(self, app_id: str, secret_key: str):
@@ -8,10 +9,26 @@ class PrivyService:
         self.secret_key = secret_key
         self.base_url = "https://api.privy.io/v1"
     
-    def create_wallet_address(self, email: str, first_name: str, last_name: str):
+    def create_wallet_address(self, email: str, first_name: str, last_name: str, user_id: str):
         print(f"Creating wallet address for {email}, {first_name}, {last_name}, {self.app_id}, {self.secret_key}")
-        request_url = f"{self.base_url}/wallets"
-        payload = {"chain_type": "ethereum", "email": email, "first_name": first_name, "last_name": last_name}
+        request_url = f"{self.base_url}/wallets_with_recovery"
+        # payload = {"chain_type": "ethereum", "email": email, "first_name": first_name, "last_name": last_name}
+        payload = {
+    "wallets": [
+        {
+            "chain_type": "ethereum",
+            "policy_ids": []
+        },
+    ],
+    "primary_signer": {"subject_id": str(user_id) if isinstance(user_id, UUID) else user_id},
+    "recovery_user": {"linked_accounts": [
+            {
+                "type": "email",
+                "address": email
+            }
+        ]}
+}
+
         headers = {
             "privy-app-id": self.app_id,
             "Authorization": f"Basic {base64.b64encode(f'{self.app_id}:{self.secret_key}'.encode()).decode()}",
