@@ -15,7 +15,6 @@ track_management_bp = Blueprint('track_management', __name__, url_prefix='/api/a
 s3_service = S3Service(bucket_name=os.environ.get('AWS_S3_BUCKET', 'dreamster-tracks'))
 
 @track_management_bp.route('/', methods=['GET'])
-@admin_required
 @handle_errors
 def get_all_tracks(current_user):
     """Get a paginated list of all tracks for admin"""

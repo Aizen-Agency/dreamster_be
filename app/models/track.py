@@ -32,6 +32,7 @@ class Track(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     s3_url = db.Column(db.String)
+    ipfs_cid = db.Column(db.String)
     artist_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False) 
     duration = db.Column(db.Integer)
     stream_count = db.Column(db.Integer, default=0)
