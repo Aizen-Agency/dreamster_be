@@ -16,6 +16,7 @@ from botocore.exceptions import NoCredentialsError, ClientError
 from app.models.user import User
 from app.models.collaborator import Collaborator
 from app.models.deleted_track import DeletedTrack
+from app.services.ipfs_service import IPFS_Service
 
 tracks_bp = Blueprint('tracks', __name__, url_prefix='/api/musician/tracks')
 s3_service = S3Service(bucket_name='dreamster-tracks')
@@ -337,6 +338,9 @@ def delete_track(current_user, track_id):
 def create_track_perk(current_user, track_id):
     # Verify track exists and belongs to the musician
     track = Track.query.filter_by(id=track_id, artist_id=current_user.id).first()
+    artist = User.query.filter_by(id=current_user.id).first()
+    collaborators = Collaborator.query.filter_by(track_id=track_id).all()
+
     if not track:
         return jsonify({'message': 'Track not found'}), HTTPStatus.NOT_FOUND
     
@@ -374,6 +378,32 @@ def create_track_perk(current_user, track_id):
     
     db.session.add(perk)
     db.session.commit()
+
+    if track.ipfs_cid is None:
+        metadata = {
+            "track_id": str(track.id),
+            "name": track.title,
+            "description": track.description,
+            "artist_id": str(artist.id),
+            "artist_username": artist.username,
+            "s3_url": track.s3_url,
+            "genre": track.genre.name if track.genre else None,
+            "tags": track.tags,
+            "starting_price": float(track.starting_price) if track.starting_price else 0,
+            "exclusive": track.exclusive,
+            "collaborators": [
+               {"trait_type": "Collaborator", "value": str(collaborator.user_id), "wallet_address": collaborator.wallet_address}
+                for collaborator in collaborators
+            ],
+            "created_at": track.created_at.isoformat(),
+            "updated_at": track.updated_at.isoformat()
+        }
+
+        ipfs_service = IPFS_Service()
+        cid = ipfs_service.upload_track_metadata(metadata)
+        print(f"CID: {cid}")
+        track.ipfs_cid = cid
+        db.session.commit()
     
     return jsonify({
         'message': 'Track perk created successfully',
