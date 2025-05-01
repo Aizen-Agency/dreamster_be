@@ -1,50 +1,32 @@
 import os
+import logging
 from app.extensions.extension import jwt
-from app.models.user import UserRole
+from app.models.user import UserRole, User
+
+logger = logging.getLogger(__name__)
+
+def read_key_file(file_path):
+    try:
+        with open(file_path, 'r') as key_file:
+            return key_file.read()
+    except Exception as e:
+        logger.error(f"Failed to read key file {file_path}: {str(e)}")
+        raise
 
 @jwt.encode_key_loader
-def get_jwt_secret_key(identity):
-    from app.models.user import User
-    
-    # Get the user from the database
+def get_jwt_encode_key(identity):
     user = User.query.get(identity)
     
-    if not user or not user.role:
-        # Default to a general secret key if no role is set
-        return os.environ.get('JWT_SECRET_KEY', os.urandom(32))
+    private_key_path = os.environ.get('JWT_PRIVATE_KEY_PATH', 'app/ssl/private_key.pem')
     
-    # Select the appropriate secret key based on role
-    if user.role == UserRole.fan:
-        return os.environ.get('FAN_SECRET_KEY')
-    elif user.role == UserRole.musician:
-        return os.environ.get('MUSICIAN_SECRET_KEY')
-    elif user.role == UserRole.admin:
-        return os.environ.get('ADMIN_SECRET_KEY')
-    else:
-        # Fallback to default secret key
-        return os.environ.get('JWT_SECRET_KEY', os.urandom(32))
+    if not user or not user.role:
+        return read_key_file(private_key_path)
+    
+    jwt.additional_claims_callback = lambda: {"role": user.role.value}
+    
+    return read_key_file(private_key_path)
 
 @jwt.decode_key_loader
 def get_jwt_decode_key(jwt_header, jwt_data):
-    """
-    Returns the appropriate key for decoding based on the JWT payload.
-    """
-    # Extract the user identity from the token
-    user_id = jwt_data.get('sub')  # 'sub' is the identity claim key
-    
-    # Get the user from the database
-    from app.models.user import User
-    user = User.query.get(user_id)
-    
-    if not user or not user.role:
-        return os.environ.get('JWT_SECRET_KEY', os.urandom(32))
-    
-    # Select the appropriate secret key based on role
-    if user.role == UserRole.fan:
-        return os.environ.get('FAN_SECRET_KEY')
-    elif user.role == UserRole.musician:
-        return os.environ.get('MUSICIAN_SECRET_KEY')
-    elif user.role == UserRole.admin:
-        return os.environ.get('ADMIN_SECRET_KEY')
-    else:
-        return os.environ.get('JWT_SECRET_KEY', os.urandom(32)) 
+    public_key_path = os.environ.get('JWT_PUBLIC_KEY_PATH', 'app/ssl/public_key.pem')
+    return read_key_file(public_key_path) 

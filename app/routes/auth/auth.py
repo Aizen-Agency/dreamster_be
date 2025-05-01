@@ -46,14 +46,17 @@ def register():
     )
     user.password = data.get('password')
     
-    # Save to database
     db.session.add(user)
     db.session.commit()
 
-    privy_service = PrivyService(os.getenv('PRIVY_APP_ID'), os.getenv('PRIVY_SECRET_KEY'))
-    response = privy_service.create_wallet_address(user.email, user.username, user.username, user.id)
-    print(response)
-    
+    token = create_access_token(identity=user.id)
+
+    privy_service = PrivyService()
+    response = privy_service.create_wallet_address(user.email, user.id, token)
+    if 'wallets' in response and len(response['wallets']) > 0:
+        user.wallet_address = response['wallets'][0]['address']
+        db.session.commit()
+
     return jsonify({
         'message': 'User registered successfully',
         'user': {

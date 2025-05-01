@@ -18,6 +18,8 @@ def create_app(config_name='default'):
     app.config.from_object(config_by_name[config_name])
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=3)
     
+    app.config['JWT_ALGORITHM'] = os.environ.get('JWT_ALGORITHM', 'RS256')
+    
     # Initialize extensions with app
     db.init_app(app)
     jwt.init_app(app)
@@ -86,13 +88,13 @@ def create_app(config_name='default'):
     def index():
         return "Welcome to the API"
     
-    # Import all models before creating tables
     from app.models.user import User, UserRole
     from app.models.track import Track
     from app.models.trackperk import TrackPerk
     from app.models.collaborator import Collaborator
     from app.models.deleted_track import DeletedTrack
-    
+    # from app.models.wallets import Wallet
+
     # Create database tables
     with app.app_context():
         db.create_all()
