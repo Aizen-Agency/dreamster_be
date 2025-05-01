@@ -49,6 +49,8 @@ def register():
     db.session.add(user)
     db.session.commit()
 
+    user = User.query.filter_by(email=data.get('email')).first()
+
     token = create_access_token(identity=user.id)
 
     privy_service = PrivyService()
