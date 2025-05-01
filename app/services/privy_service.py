@@ -4,6 +4,7 @@ import base64
 from uuid import UUID
 from app.extensions.extension import db
 from app.models.wallets import Wallet
+from app import app
 
 class PrivyService:
     def __init__(self):
