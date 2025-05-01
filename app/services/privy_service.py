@@ -34,7 +34,7 @@ class PrivyService:
             "privy-app-id": self.app_id,
             "Authorization": f"Basic {base64.b64encode(f'{self.app_id}:{self.secret_key}'.encode()).decode()}",
             "Content-Type": "application/json",
-            "Origin": "http://localhost:5000"
+            "Origin": "http://localhost:5000" if app.config['ENV'] == 'development' else "https://dreamster-be-364c1455b1f3.herokuapp.com"
         }
         response = requests.post(request_url, json=payload, headers=headers)
         response_data = response.json()
@@ -59,7 +59,7 @@ class PrivyService:
             "privy-app-id": self.app_id,
             "Authorization": f"Basic {base64.b64encode(f'{self.app_id}:{self.secret_key}'.encode()).decode()}",
             "Content-Type": "application/json",
-            "Origin": "http://localhost:5000"
+            "Origin": "http://localhost:5000" if app.config['ENV'] == 'development' else "https://dreamster-be-364c1455b1f3.herokuapp.com"
         }
         response = requests.get(request_url, headers=headers)
         return response.json()
