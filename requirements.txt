@@ -97,3 +97,4 @@ faiss-cpu==1.7.4
 flask_jwt_extended
 bs4==0.0.1
 elevenlabs==0.2.26
+cryptography>=3.4.0
