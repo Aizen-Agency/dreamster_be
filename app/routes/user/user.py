@@ -31,6 +31,7 @@ def get_user_by_id(current_user, user_id):
         'phone_number': user.phone_number,
         'created_at': user.created_at,
         'updated_at': user.updated_at,
+        'wallet_address': user.wallet_address,
         # 'bio': user.bio if user.bio else None,
         # 'location': user.location if user.location else None,
         # 'website': user.website if user.website else None,
@@ -47,7 +48,8 @@ def get_profile(current_user):
         'email': current_user.email,
         'role': current_user.role.name if current_user.role else None,
         'phone_number': current_user.phone_number,
-        'profile_picture_url': current_user.profile_picture_url
+        'profile_picture_url': current_user.profile_picture_url,
+        'wallet_address': current_user.wallet_address
     }), HTTPStatus.OK
 
 @user_bp.route('/update', methods=['PUT'])
@@ -93,7 +95,8 @@ def update_user(current_user):
                 'email': current_user.email,
                 'role': current_user.role.name if current_user.role else None,
                 'phone_number': current_user.phone_number,
-                'profile_picture_url': current_user.profile_picture_url
+                'profile_picture_url': current_user.profile_picture_url,
+                'wallet_address': current_user.wallet_address
             }
         }), HTTPStatus.OK
     except Exception as e:

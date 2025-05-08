@@ -64,7 +64,8 @@ def register():
         'user': {
             'id': user.id,
             'username': user.username,
-            'email': user.email
+            'email': user.email,
+            'wallet_address': user.wallet_address
         }
     }), 201
 
@@ -134,6 +135,7 @@ def login():
             'id': user.id,
             'username': user.username,
             'email': user.email,
-            'role': user.role.name if user.role else None
+            'role': user.role.name if user.role else None,
+            'wallet_address': user.wallet_address
         }
     }), 200
