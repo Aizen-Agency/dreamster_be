@@ -84,6 +84,32 @@ def approve_track(current_user, track_id):
     track.updated_at = datetime.utcnow()
     
     db.session.commit()
+
+    if track.arweave_tx_id is None:
+        metadata = {
+            "track_id": str(track.id),
+            "name": track.title,
+            "description": track.description,
+            "artist_id": str(artist.id),
+            "artist_username": artist.username,
+            "s3_url": track.s3_url,
+            "genre": track.genre.name if track.genre else None,
+            "tags": track.tags,
+            "starting_price": float(track.starting_price) if track.starting_price else 0,
+            "exclusive": track.exclusive,
+            "collaborators": [
+                {"trait_type": "Collaborator", "value": str(collaborator.user_id), "wallet_address": collaborator.wallet_address}
+                for collaborator in collaborators
+            ],
+            "created_at": track.created_at.isoformat(),
+            "updated_at": track.updated_at.isoformat()
+        }
+
+        arweave_service = ArweaveService()
+        tx_id = arweave_service.upload_metadata(metadata)
+        print(f"Arweave TX ID: {tx_id}")
+        track.arweave_tx_id = tx_id
+        track.arweave_uri = f"ar://{tx_id}"
     
     return jsonify({
         'message': 'Track approved successfully',
