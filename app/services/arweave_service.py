@@ -40,3 +40,4 @@ class ArweaveService:
     
     def get_balance(self):
         return self.bundlr.get_balance()
+        
