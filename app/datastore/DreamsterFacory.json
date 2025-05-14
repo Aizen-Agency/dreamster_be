@@ -1,0 +1,668 @@
+[
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_nftImplementation",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_bondingCurveImplementation",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_yieldImplementation",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_signer",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "InvalidAddress",
+        "type": "error"
+    },
+    {
+        "inputs": [],
+        "name": "InvalidImplementation",
+        "type": "error"
+    },
+    {
+        "inputs": [],
+        "name": "InvalidOwner",
+        "type": "error"
+    },
+    {
+        "inputs": [],
+        "name": "InvalidParameter",
+        "type": "error"
+    },
+    {
+        "inputs": [],
+        "name": "NotAuthorized",
+        "type": "error"
+    },
+    {
+        "inputs": [],
+        "name": "NotContractOwner",
+        "type": "error"
+    },
+    {
+        "inputs": [],
+        "name": "NotFactoryCollection",
+        "type": "error"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "proxyAddress",
+                "type": "address"
+            },
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "newImplementation",
+                "type": "address"
+            }
+        ],
+        "name": "ContractUpgraded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "address",
+                "name": "nftImplementation",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "address",
+                "name": "bondingCurveImplementation",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "address",
+                "name": "yieldImplementation",
+                "type": "address"
+            }
+        ],
+        "name": "ImplementationsUpdated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "creator",
+                "type": "address"
+            },
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "nftContract",
+                "type": "address"
+            },
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "bondingCurveContract",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "address",
+                "name": "yieldContract",
+                "type": "address"
+            }
+        ],
+        "name": "NFTCollectionCreated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "previousOwner",
+                "type": "address"
+            },
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "newOwner",
+                "type": "address"
+            }
+        ],
+        "name": "OwnershipTransferred",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "oldSigner",
+                "type": "address"
+            },
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "newSigner",
+                "type": "address"
+            }
+        ],
+        "name": "SignerChanged",
+        "type": "event"
+    },
+    {
+        "inputs": [],
+        "name": "bondingCurveImplementation",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "string",
+                        "name": "name",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "symbol",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "arweaveUri",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "maxSupply",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "launchDate",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "initialPrice",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "dreamsterTokenAddress",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "ethUsdPriceFeed",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "signer",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "swapAddress",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "owner",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "dreamsterAddress",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "treasuryAddress",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "epochDuration",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "uniswapRouter",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct IDreamsterFactory.NFTCollectionConfig",
+                "name": "config",
+                "type": "tuple"
+            },
+            {
+                "components": [
+                    {
+                        "internalType": "uint8",
+                        "name": "v",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "bytes32",
+                        "name": "r",
+                        "type": "bytes32"
+                    },
+                    {
+                        "internalType": "bytes32",
+                        "name": "s",
+                        "type": "bytes32"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    }
+                ],
+                "internalType": "struct IDreamsterFactory.Sign",
+                "name": "sign",
+                "type": "tuple"
+            }
+        ],
+        "name": "createNFTCollection",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "nftContract",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "bondingCurveAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "yieldContractAddress",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "name": "creatorToCollections",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "nftContract",
+                "type": "address"
+            }
+        ],
+        "name": "getCollectionContracts",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "bondingCurve",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "yieldContract",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "creator",
+                "type": "address"
+            }
+        ],
+        "name": "getCreatorCollections",
+        "outputs": [
+            {
+                "internalType": "address[]",
+                "name": "collections",
+                "type": "address[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "isCollection",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "nftContract",
+                "type": "address"
+            }
+        ],
+        "name": "isFactoryCollection",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "nftImplementation",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "nftToBondingCurve",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "nftToYield",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "renounceOwnership",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_nftImplementation",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_bondingCurveImplementation",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_yieldImplementation",
+                "type": "address"
+            }
+        ],
+        "name": "setImplementations",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_signer",
+                "type": "address"
+            }
+        ],
+        "name": "setSigner",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "signer",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "newOwner",
+                "type": "address"
+            }
+        ],
+        "name": "transferOwnership",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "nftAddress",
+                "type": "address"
+            }
+        ],
+        "name": "upgradeAllImplementations",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "nftAddress",
+                "type": "address"
+            }
+        ],
+        "name": "upgradeBondingCurveImplementation",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "nftAddress",
+                "type": "address"
+            }
+        ],
+        "name": "upgradeNFTImplementation",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "nftAddress",
+                "type": "address"
+            }
+        ],
+        "name": "upgradeYieldImplementation",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "name": "usedNonce",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "nftContract",
+                "type": "address"
+            }
+        ],
+        "name": "verifyCollection",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "isValid",
+                "type": "bool"
+            },
+            {
+                "internalType": "string",
+                "name": "errorMessage",
+                "type": "string"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "yieldImplementation",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]
